@@ -17,6 +17,7 @@ import { TrainingService } from '../training/training.service';
 
 import { EquippingAttendanceService, expectedOn } from './equipping-attendance.service';
 import { ENCOUNTER_MINIMUM_AGE, ageOn } from './equipping.service';
+import { lifeClassFiledOf } from './life-class-from-school';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, NetworkName } from '../database/schema';
@@ -361,8 +362,9 @@ export class EquippingEncounterService {
           );
         }
       }
-      // **A posted Not yet passes at a later Encounter** (decision 0509): the posted grade on the
-      // weekend row's own registration, through its open enrollment, locked. A move keeps the
+      // **A posted Not yet passes at a later Encounter** (decision 0509): the grade on the weekend
+      // row's own registration, as it stands now (decision 0513: a change may have made a posted
+      // Not yet something else, or made another grade Not yet), locked. A move keeps the
       // registration and opens a new enrollment on it, so a student moved since is still found,
       // and a Life Class of another term, on another registration, never is. A grade found here
       // is passed, or was passed, at most once.
@@ -372,6 +374,7 @@ export class EquippingEncounterService {
             .innerJoin('equipping_enrollments as made', 'made.id', 'ee.enrollment_id')
             .innerJoin('equipping_enrollments as e', 'e.registration_id', 'made.registration_id')
             .innerJoin('equipping_final_grades as g', 'g.enrollment_id', 'e.id')
+            .innerJoin('equipping_current_grades as now', 'now.final_grade_id', 'g.id')
             .select([
               'ee.id as encounter_enrollment_id',
               'g.id',
@@ -383,7 +386,7 @@ export class EquippingEncounterService {
               'in',
               enrolled.map((row) => row.id),
             )
-            .where('g.grade', '=', 'NOT_YET')
+            .where('now.grade', '=', 'NOT_YET')
             .orderBy('g.id')
             .forUpdate(['g'])
             .execute()
@@ -392,13 +395,23 @@ export class EquippingEncounterService {
         notYet.map((row) => [canonicalId(row.encounter_enrollment_id), row]),
       );
       // One who passed at this weekend is not recorded as not attended: the Life Class it filed
-      // rests on it (owner, 2026-11-22).
-      const undone = enrolled.filter(
+      // rests on it (owner, 2026-11-22). Read from what the school's Life Class stands filed under
+      // (decision 0513), so a pass kept since by a change to Passed is still held to it.
+      const unmarking = enrolled.filter(
         (row) =>
-          !came.has(canonicalId(row.id)) &&
-          currentOf.get(canonicalId(row.id))?.came === true &&
-          notYetOf.get(canonicalId(row.id))?.passed_later_at != null,
+          !came.has(canonicalId(row.id)) && currentOf.get(canonicalId(row.id))?.came === true,
       );
+      const restsHere = new Set(
+        (await lifeClassFiledOf(trx, { personIds: unmarking.map((row) => row.person_id) }))
+          .filter(
+            ({ filed }) =>
+              filed?.kind === 'WEEKEND' &&
+              canonicalId(filed.seasonId) === canonicalId(weekend.season.id) &&
+              filed.network === body.network,
+          )
+          .map(({ personId }) => canonicalId(personId)),
+      );
+      const undone = unmarking.filter((row) => restsHere.has(canonicalId(row.person_id)));
       if (undone.length > 0) {
         const names = await this.people.forDecisions(undone.map((row) => row.person_id));
         throw new InvariantViolationError(

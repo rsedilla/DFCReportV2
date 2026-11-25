@@ -303,6 +303,58 @@ export class RecordMakeUpDto {
   made_up_on!: string;
 }
 
+/** What a change after posting sets a lesson to (decision 0513). */
+export const GRADE_CHANGE_TO = ['CAME', 'ABSENT', 'MADE_UP'] as const;
+/** Why a lesson is changed after posting, chosen from two (decision 0513). */
+export const GRADE_CHANGE_WHY = ['MADE_UP_AFTER_POSTING', 'RECORDED_WRONGLY'] as const;
+
+/** `GET /equipping/final-grades/grades/{id}/change-preview` (decision 0513). */
+export class GradeChangePreviewDto {
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  lesson!: number;
+
+  @IsIn(GRADE_CHANGE_TO)
+  to!: (typeof GRADE_CHANGE_TO)[number];
+
+  @IsOptional()
+  @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })
+  made_up_on?: string;
+}
+
+/** `POST /equipping/final-grades/grades/{id}/changes`: one lesson, with the reason (decision 0513). */
+export class ChangeGradeDto {
+  @IsInt()
+  @Min(1)
+  @Max(9)
+  lesson!: number;
+
+  @IsIn(GRADE_CHANGE_TO)
+  to!: (typeof GRADE_CHANGE_TO)[number];
+
+  @IsOptional()
+  @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })
+  made_up_on?: string;
+
+  @IsIn(GRADE_CHANGE_WHY)
+  why!: (typeof GRADE_CHANGE_WHY)[number];
+
+  @IsString()
+  // Trimmed, then required to be non-empty: the column refuses a blank (section 22).
+  @Transform(({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value))
+  @IsStorableText()
+  @MinLength(1)
+  @MaxLength(500)
+  details!: string;
+
+  /** How many changes the grade had when the dialog opened, so one made since is refused. */
+  @IsInt()
+  @Min(0)
+  changes_seen!: number;
+}
+
 /** The two Encounter weekends of a season: the Men's for men, the Women's for women. */
 export const ENCOUNTER_NETWORKS = ['MENS', 'WOMENS'] as const;
 

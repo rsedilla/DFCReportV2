@@ -915,6 +915,19 @@ export class EquippingService {
           ),
         ),
       )
+      // Graded Passed or Not passed, the registration is finished (decision 0513, point 16).
+      .where((eb) =>
+        eb.not(
+          eb.exists(
+            eb
+              .selectFrom('equipping_enrollments as e')
+              .innerJoin('equipping_current_grades as g', 'g.enrollment_id', 'e.id')
+              .select('e.id')
+              .whereRef('e.registration_id', '=', 'r.id')
+              .where('g.grade', 'in', ['PASSED', 'NOT_PASSED']),
+          ),
+        ),
+      )
       .orderBy('r.registered_at')
       .execute();
 
@@ -2050,6 +2063,22 @@ export class EquippingService {
       for (const row of open) {
         refusals.push({ registration_id: row.registration_id, reason: 'already in a class' });
       }
+      // **A graded registration is finished** (decision 0513, point 16): one graded Passed or Not
+      // passed is not enrolled again; trying again is a new registration.
+      const graded = await trx
+        .selectFrom('equipping_enrollments as e')
+        .innerJoin('equipping_current_grades as g', 'g.enrollment_id', 'e.id')
+        .select('e.registration_id')
+        .distinct()
+        .where('e.registration_id', 'in', [...registrationIds])
+        .where('g.grade', 'in', ['PASSED', 'NOT_PASSED'])
+        .execute();
+      for (const row of graded) {
+        refusals.push({
+          registration_id: row.registration_id,
+          reason: 'already graded this term; to take it again they register for a later term',
+        });
+      }
 
       const eligibility = await this.eligibilityOf(
         regs.map((reg) => reg.person_id),
@@ -2421,8 +2450,9 @@ export class EquippingService {
       ...wanted,
       ...pairs.absorbed.filter((_, index) => wanted.has(canonicalId(pairs.kept[index]))),
     ];
+    // The grade as it stands now, a change after posting included (decision 0513).
     const rows = await executor
-      .selectFrom('equipping_final_grades as g')
+      .selectFrom('equipping_current_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
       .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
       .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
@@ -2504,8 +2534,9 @@ export class EquippingService {
       ...kept,
       ...pairs.absorbed.filter((_, index) => kept.has(canonicalId(pairs.kept[index]))),
     ];
+    // A try is a grade that stands *Not passed* now, a change after posting included (0513).
     const rows = await this.db
-      .selectFrom('equipping_final_grades as g')
+      .selectFrom('equipping_current_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
       .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
       .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
@@ -2602,9 +2633,11 @@ export class EquippingService {
       const notYet =
         notYetLeaving === undefined
           ? undefined
-          : await trx
-              .selectFrom('equipping_final_grades')
-              .select('id')
+          : // The grade as it stands (decision 0513): a posted Not passed made Not yet leaves as
+            // any Not yet may, and a posted Not yet made something else does not.
+            await trx
+              .selectFrom('equipping_current_grades')
+              .select('final_grade_id')
               .where('enrollment_id', '=', notYetLeaving)
               .where('grade', '=', 'NOT_YET')
               .executeTakeFirst();
@@ -2725,6 +2758,13 @@ export class EquippingService {
       }
       // The database's own refusals of decision 0510, reached only past the checks above.
       const refused = violatedConstraint(error);
+      // Decision 0513, point 16, reached only where a posting landed past the check above.
+      if (refused === 'equipping_enrollment_graded_registration') {
+        throw new InvariantViolationError(
+          'Somebody in the list was graded on that registration; nobody was enrolled.',
+          { field: 'registration_ids' },
+        );
+      }
       if (refused === 'equipping_class_cancelled') {
         throw new InvariantViolationError('That class was cancelled; nothing on it changes.', {
           field: 'class_id',

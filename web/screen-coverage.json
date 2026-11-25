@@ -667,6 +667,14 @@
       "screen": "web/app/(app)/equipping/final-grades/page.tsx"
     },
     {
+      "route": "GET /api/v1/equipping/final-grades/grades/:id/change-preview",
+      "screen": "web/components/grade-change-dialog.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/final-grades/grades/:id/changes",
+      "screen": "web/components/grade-change-dialog.tsx"
+    },
+    {
       "route": "GET /api/v1/equipping/coordinate/classes/:id/grades",
       "screen": "web/app/(app)/equipping/classes/[id]/grades/page.tsx"
     },

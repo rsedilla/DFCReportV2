@@ -101,7 +101,7 @@ interface ClassRow {
 }
 
 /** One lesson of one student's register, wherever it was marked (decision 0503). */
-interface RegisterEntry {
+export interface RegisterEntry {
   lesson: number;
   /** The lesson and enrollment a make-up of it is recorded against. */
   lessonId: string;
