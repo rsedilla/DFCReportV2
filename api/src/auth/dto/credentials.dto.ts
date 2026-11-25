@@ -97,6 +97,12 @@ export class SetCoordinatesLifeClassDto {
   coordinates_life_class!: boolean;
 }
 
+/** SOL 1 Coordinator on a Leader account, ticked or cleared (decision 0514). */
+export class SetCoordinatesSol1Dto {
+  @IsBoolean()
+  coordinates_sol_1!: boolean;
+}
+
 export class ForgotPasswordDto {
   @IsEmailAddress()
   @MaxLength(320)

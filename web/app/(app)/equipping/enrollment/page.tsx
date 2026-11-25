@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useId, useState } from 'react';
 
-import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
+import { EquippingFrame, LevelPicker, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -13,6 +13,8 @@ import { timeLabel } from '@/lib/cells';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
   DAY_NAMES,
+  EQUIPPING_LEVELS,
+  LEVEL_LABELS,
   currentTerm,
   enroll,
   getClass,
@@ -31,9 +33,13 @@ import { shortDate } from '@/lib/lifecycle';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { cn } from '@/lib/utils';
 
+/** A class holds 30, more allowed with a reason (decision 0501, point 6). */
+const CLASS_HOLDS = 30;
+
 /**
- * Enrollment (SKILL.md section 29, decision 0499, points 10 and 11): the term's classes, and
- * putting registered people into one.
+ * Enrollment (SKILL.md section 29, decision 0499, points 10 and 11; decision 0514): a level's
+ * classes in a term, and putting registered people into one. **SOL 1 has no Encounter**, so its
+ * class names no weekend, its list has no age column, and a birthday not recorded stops nobody.
  *
  * **Two checks are never overridden**: a birthday recorded, and 14 on the first day of the
  * person's own Network's Encounter weekend. Somebody failing either has no tick box, and the
@@ -61,6 +67,15 @@ export default function EnrollmentPage() {
     <EquippingFrame current="/equipping/enrollment" title="Enrollment" lead="Put registered people into a class.">
       <div className={CONTROL_BAR}>
         <TermPicker term={term} onChange={setTerm} />
+        {/* The same Level picker as Registration and Classes (decision 0514). */}
+        <LevelPicker
+          levels={EQUIPPING_LEVELS}
+          value={term.level}
+          onChange={(level) => {
+            setChosen(null);
+            setTerm({ ...term, level });
+          }}
+        />
         <div className="flex flex-wrap gap-2" role="group" aria-label="Classes">
           {(classes.data?.data ?? []).map((each) => (
             <Button
@@ -76,8 +91,8 @@ export default function EnrollmentPage() {
               <span className="flex flex-col items-start leading-tight">
                 <span>{each.name}</span>
                 <span className="text-xs font-normal">
-                  {DAY_NAMES[each.day_of_week - 1].slice(0, 3)} {timeLabel(each.time_of_day)} · {each.enrolled}{' '}
-                  enrolled
+                  {DAY_NAMES[each.day_of_week - 1].slice(0, 3)} {timeLabel(each.time_of_day)} · {each.enrolled} of{' '}
+                  {CLASS_HOLDS} enrolled
                 </span>
               </span>
             </Button>
@@ -86,8 +101,8 @@ export default function EnrollmentPage() {
       </div>
       <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
       {classes.data && classes.data.data.length === 0 ? (
-        <p className="text-muted mt-4 text-sm">No Life Class is open in {termLabel(term)} yet.{' '}
-          {opens ? 'Open one under Classes.' : 'The Life Class Coordinator opens it.'}</p>
+        <p className="text-muted mt-4 text-sm">No {LEVEL_LABELS[term.level]} class is open in {termLabel(term)} yet.{' '}
+          {opens ? 'Open one under Classes.' : `The ${LEVEL_LABELS[term.level]} Coordinator opens it.`}</p>
       ) : null}
       {classId ? <ClassView key={classId} classId={classId} classes={classes.data?.data ?? []} /> : null}
     </EquippingFrame>
@@ -139,6 +154,7 @@ function ClassView({
     return <p className="text-muted mt-4 text-sm">Loading&hellip;</p>;
   }
   const cls = detail.data.class;
+  const life = cls.level === 'LIFE_CLASS';
   const enrollable = detail.data.ready.filter((row) => row.blocked === null);
   const waiting = detail.data.ready.filter((row) => row.blocked !== null);
   const tick = (registrationId: string, checked: boolean) => {
@@ -159,14 +175,19 @@ function ClassView({
         <p className="text-muted mt-1 text-sm">
           {DAY_NAMES[cls.day_of_week - 1]}s, {timeLabel(cls.time_of_day)}
           {cls.place ? ` · ${cls.place}` : ''} · Teacher: {cls.teacher?.full_name ?? 'not named yet'} · Starts {cls.first_lesson_on}
-          {' · '}Encounter weekend: men {cls.encounter_weekends.mens}, women {cls.encounter_weekends.womens}
+          {life
+            ? ` · Encounter weekend: men ${cls.encounter_weekends.mens}, women ${cls.encounter_weekends.womens}`
+            : ' · 10 lessons'}
           {cls.lesson_6 ? ` · Lesson 6 on ${shortDate(cls.lesson_6.on)}` : ''}
         </p>
         <p className="text-muted mt-1 text-sm">Run by: the church (Equipping)</p>
       </div>
 
       <h2 className="mt-6 text-lg font-semibold">
-        Ready to enroll <span className="text-muted text-sm font-normal">· registered for Life Class, in no class yet</span>
+        Ready to enroll{' '}
+        <span className="text-muted text-sm font-normal">
+          · {detail.data.ready.length} registered for {LEVEL_LABELS[cls.level]}, in no class yet
+        </span>
       </h2>
       {justEnrolled.length > 0 ? (
         <p role="status" className="border-accent text-ink bg-surface mt-2 rounded-xl border px-4 py-3 text-sm font-semibold">
@@ -199,7 +220,8 @@ function ClassView({
                 caption={`Ready to enroll in ${cls.name}`}
                 ticked={ticked}
                 onTick={tick}
-                lesson6={cls.lesson_6}
+                life={life}
+                lesson6={cls.lesson_6 ?? undefined}
                 startOver={startOver}
                 onStartOver={(id, on) => {
                   const next = new Set(startOver);
@@ -236,7 +258,13 @@ function ClassView({
                 Can&rsquo;t enroll yet{' '}
                 <span className="text-muted text-sm font-normal">· {waiting.length}</span>
               </h3>
-              <ReadyRows rows={waiting} caption={`Can't enroll in ${cls.name} yet`} ticked={ticked} onTick={tick} />
+              <ReadyRows
+                rows={waiting}
+                caption={`Can't enroll in ${cls.name} yet`}
+                ticked={ticked}
+                onTick={tick}
+                life={life}
+              />
             </>
           ) : null}
         </>
@@ -444,6 +472,7 @@ function ReadyRows({
   caption,
   ticked,
   onTick,
+  life,
   lesson6,
   startOver,
   onStartOver,
@@ -452,6 +481,8 @@ function ReadyRows({
   caption: string;
   ticked: ReadonlySet<string>;
   onTick: (registrationId: string, checked: boolean) => void;
+  /** Life Class shows the age at the Encounter; SOL has none (decision 0514). */
+  life: boolean;
   lesson6?: { on: string; open: boolean };
   startOver?: ReadonlySet<string>;
   onStartOver?: (registrationId: string, on: boolean) => void;
@@ -466,7 +497,7 @@ function ReadyRows({
             </HeaderCell>
             <HeaderCell className="w-[28%]">Name</HeaderCell>
             <HeaderCell>Leader</HeaderCell>
-            <HeaderCell className="w-44">Age at the Encounter</HeaderCell>
+            {life ? <HeaderCell className="w-44">Age at the Encounter</HeaderCell> : null}
             <HeaderCell>Registration</HeaderCell>
           </tr>
         </thead>
@@ -492,7 +523,7 @@ function ReadyRows({
                 ) : null}
               </td>
               <td className="px-3 py-3 align-top">{row.leader_name ?? 'No leader yet'}</td>
-              <td className="px-3 py-3 align-top">{row.age_at_encounter ?? '—'}</td>
+              {life ? <td className="px-3 py-3 align-top">{row.age_at_encounter ?? '—'}</td> : null}
               <td className="px-3 py-3 align-top">{row.with_exception ? 'Registered with exception' : 'Registered'}</td>
             </tr>
           ))}
@@ -515,7 +546,7 @@ function ReadyRows({
             <p className="text-muted pb-1 text-sm">
               {tryLabel(row.try_number) ? `${tryLabel(row.try_number)} · ` : ''}
               {row.leader_name ?? 'No leader yet'}
-              {row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
+              {life && row.age_at_encounter !== null ? ` · ${row.age_at_encounter} at the Encounter` : ''}
               {' · '}
               {row.with_exception ? 'Registered with exception' : 'Registered'}
             </p>

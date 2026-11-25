@@ -49,6 +49,10 @@ export async function mockEquipping(
     : {};
   // A student taking Life Class again (decision 0511): Carlito and Ernesto on a 2nd try.
   const second = options.tries ? { try_number: 2 } : {};
+  // The counts on the Level picker (decision 0514).
+  await page.route('**/api/v1/equipping/registrations/counts?*', (route) =>
+    route.fulfill(json({ LIFE_CLASS: 2, SOL_1: 0 })),
+  );
   await page.route('**/api/v1/equipping/registrations?*', (route) =>
     route.fulfill(
       json({
@@ -113,6 +117,7 @@ export async function mockEquipping(
         class: {
           id: CLASS_ID,
           name: 'Life Class A',
+          level: 'LIFE_CLASS',
           day_of_week: 2,
           time_of_day: '19:00',
           place: 'Room 2',
@@ -167,6 +172,10 @@ export async function mockCoordinatedClasses(
     encounter_season_id: '3f1b7c6e-0000-4000-8000-00000000e301',
     run_by: 'CHURCH',
   };
+  // The levels the reader coordinates (decision 0514): Life Class alone, so no picker.
+  await page.route('**/api/v1/equipping/coordinate/levels', (route) =>
+    route.fulfill(json({ data: ['LIFE_CLASS'] })),
+  );
   await page.route('**/api/v1/equipping/coordinate/classes?*', (route) =>
     route.fulfill(
       json({
@@ -875,7 +884,8 @@ export async function mockFinalGrades(
 
 /** The Register form's person read for Wilfredo, with two earlier tries or none (decision 0511). */
 export async function mockCandidate(page: Page, tries: boolean, joins = false): Promise<void> {
-  await page.route('**/api/v1/equipping/people/3f1b7c6e-0000-4000-8000-00000000f002', (route) =>
+  // With its level asked for (decision 0514), so any query string.
+  await page.route('**/api/v1/equipping/people/3f1b7c6e-0000-4000-8000-00000000f002*', (route) =>
     route.fulfill(
       json({
         person: { id: '3f1b7c6e-0000-4000-8000-00000000f002', member_id: 'M-000519', full_name: 'Wilfredo Sanchez' },

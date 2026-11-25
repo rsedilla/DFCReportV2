@@ -27,16 +27,19 @@ import {
   EncounterQueryDto,
   EnrollDto,
   EnrollEncounterDto,
+  EquippingLevelDto,
   EquippingSearchDto,
+  EquippingTermOnlyDto,
   EquippingTermDto,
+  GuideSearchDto,
   ListRegistrationsDto,
   MoveEnrollmentDto,
+  NameGuideDto,
   OpenClassDto,
   ReasonDto,
-  NameGuideDto,
   RecordMakeUpDto,
-  SaveLessonDto,
   RegisterDto,
+  SaveLessonDto,
   SetTeacherDto,
   SwapGuideDto,
   TeacherClashDto,
@@ -138,9 +141,11 @@ export class EquippingController {
   @Get('guides')
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
   async guides(
-    @Query() query: EquippingSearchDto,
+    @Query() query: GuideSearchDto,
     @CurrentActor() actor: Actor,
   ): Promise<{ data: Record<string, unknown>[] }> {
+    const level = query.level ?? 'LIFE_CLASS';
+    await this.equipping.assertCoordinatesLevel(actor, level);
     if (normalizeName(query.q).replace(/\s+/g, '').length < CHURCH_WIDE_SEARCH_MINIMUM) {
       throw new ValidationFailedError('Enter at least three letters of a name.', { field: 'q' });
     }
@@ -155,7 +160,7 @@ export class EquippingController {
     if (spent.isBlocked) {
       throw new ThrottlerException();
     }
-    const data = await this.equipping.search(query.q, CHURCH_WIDE_PAGE_LIMIT, 'guides');
+    const data = await this.equipping.search(query.q, CHURCH_WIDE_PAGE_LIMIT, 'guides', level);
     await this.people.recordDirectorySearch(actor.accountId, query.q, data.length);
     return { data };
   }
@@ -165,9 +170,10 @@ export class EquippingController {
   @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
   async candidate(
     @Param('id', new UuidParamPipe('id')) id: string,
+    @Query() query: EquippingLevelDto,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
-    const candidate = await this.equipping.candidate(id);
+    const candidate = await this.equipping.candidate(id, query.level ?? 'LIFE_CLASS');
     // **Recorded as a full-record read is** (section 8, decision 0414): it carries the
     // birthday and the attendance figures, so it counts toward the hour's alert to the Admin.
     if (actor.personId !== null) {
@@ -180,6 +186,13 @@ export class EquippingController {
   @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
   async registrations(@Query() query: ListRegistrationsDto): Promise<Record<string, unknown>> {
     return this.equipping.registrations(query);
+  }
+
+  /** How many are registered for each level in a term (decision 0514), for the Level picker. */
+  @Get('registrations/counts')
+  @RequiresCapability(Capability.EquippingManage, { kind: 'church' })
+  async registrationCounts(@Query() query: EquippingTermOnlyDto): Promise<Record<string, unknown>> {
+    return this.equipping.registrationCounts(query);
   }
 
   @Post('registrations')
@@ -223,8 +236,22 @@ export class EquippingController {
   /** The Coordinator's *Classes* (decision 0501, point 22): a level's classes in a term. */
   @Get('coordinate/classes')
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
-  async coordinatorClasses(@Query() query: EquippingTermDto): Promise<Record<string, unknown>> {
-    return this.equipping.coordinatorClasses(query);
+  async coordinatorClasses(
+    @Query() query: EquippingTermDto,
+    @CurrentActor() actor: Actor,
+  ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesLevel(actor, query.level);
+    return this.equipping.coordinatorClasses(query, actor);
+  }
+
+  /**
+   * The levels the reader coordinates (decision 0514), for the Level picker on *Classes*: every
+   * level the school runs for the Admin, and for a Coordinator the levels their ticks name.
+   */
+  @Get('coordinate/levels')
+  @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
+  async coordinatorLevels(@CurrentActor() actor: Actor): Promise<Record<string, unknown>> {
+    return { data: await this.equipping.coordinatedLevelsOf(actor) };
   }
 
   /** The seasons a class names, for the Coordinator's *Open a class*. */
@@ -244,6 +271,7 @@ export class EquippingController {
     @Param('id', new UuidParamPipe('id')) id: string,
     @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.grades.classGrades(actor, id);
   }
 
@@ -257,6 +285,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.grades.check(actor, id, body.fingerprint, claim);
   }
 
@@ -265,7 +294,9 @@ export class EquippingController {
   @RequiresCapability(Capability.EquippingCoordinate, { kind: 'church' })
   async coordinatorStudents(
     @Param('id', new UuidParamPipe('id')) id: string,
+    @CurrentActor() actor: Actor,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.equipping.coordinatorClassStudents(id);
   }
 
@@ -283,6 +314,7 @@ export class EquippingController {
     // **Recorded and limited as a church-wide search is** (owner, 2026-11-20, decision 0501):
     // each answer can name when a Cell outside the Coordinator's scope meets, so a check is
     // written under the Audit Log's Lookups and held to thirty a minute per account.
+    await this.equipping.assertCoordinatesClass(actor, id);
     const key = `teacher-clash:${actor.accountId}`;
     const spent = await this.throttle.increment(
       key,
@@ -307,6 +339,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.equipping.setTeacher(actor, id, body.teacher_person_id, claim);
   }
 
@@ -320,6 +353,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.equipping.correctClass(actor, id, body, claim);
   }
 
@@ -333,6 +367,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.equipping.cancelClass(actor, id, body.reason, claim);
   }
 
@@ -345,6 +380,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.equipping.nameGuide(actor, id, body.person_id, claim);
   }
 
@@ -358,6 +394,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesClass(actor, id);
     return this.equipping.removeGuide(actor, id, guideId, claim);
   }
 
@@ -436,6 +473,7 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.equipping.assertCoordinatesEnrollment(actor, id);
     return this.equipping.swapGuide(actor, id, body.guide_id, claim);
   }
 

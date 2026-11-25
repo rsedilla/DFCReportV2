@@ -25,7 +25,11 @@ import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
 import { TrainingService } from '../training/training.service';
 
-import { CLASS_LESSONS, EquippingAttendanceService } from './equipping-attendance.service';
+import {
+  CLASS_LESSONS,
+  EquippingAttendanceService,
+  refuseSolNotBuilt,
+} from './equipping-attendance.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database } from '../database/schema';
@@ -95,6 +99,10 @@ export class EquippingGradesService {
 
   /** `GET /equipping/final-grades`: the term's classes, each with where it stands. */
   async classes(query: EquippingTermDto): Promise<Record<string, unknown>> {
+    // SOL 1's final grades are not built yet (decision 0514).
+    if (query.level !== 'LIFE_CLASS') {
+      return { data: [] };
+    }
     const rows = await this.db
       .selectFrom('equipping_classes')
       .select(['id', 'name', 'day_of_week', 'time_of_day'])
@@ -366,12 +374,13 @@ export class EquippingGradesService {
   private async standingWithin(executor: Db | Transaction<Database>, classId: string) {
     const cls = await executor
       .selectFrom('equipping_classes')
-      .select(['id', 'name', 'day_of_week', 'time_of_day', 'place', 'first_lesson_on'])
+      .select(['id', 'name', 'level', 'day_of_week', 'time_of_day', 'place', 'first_lesson_on'])
       .where('id', '=', classId)
       .executeTakeFirst();
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
     }
+    refuseSolNotBuilt(cls);
     const posting =
       (await executor
         .selectFrom('equipping_class_postings')

@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useId, type ReactNode } from 'react';
 
 import { PAGE_WIDTH } from '@/components/app-shell';
+import { FilterChip } from '@/components/ui/filter-chip';
 import { TAB_GRID, TAB_PANE, TAB_ROW, tabClasses } from '@/components/ui/frame';
-import { termLabel, type Term } from '@/lib/equipping';
+import { LEVEL_LABELS, termLabel, type EquippingLevel, type Term } from '@/lib/equipping';
 import {
   CoordinatorPhoneTabs,
   GrowthEquippingTabs,
@@ -182,6 +183,40 @@ export function TextBox({
 }
 
 /** The term to show: this year's three and next year's, the chosen one first in its year. */
+/**
+ * **The Level picker** (decision 0514): one chip a level, beside the Term, on Registration,
+ * Enrollment and Classes, so the three pages work alike. A count follows a level's name where the
+ * page has one (*Life Class · 14*). Each chip says it is on with a tick and `aria-pressed`, never
+ * by colour alone (1.4.1).
+ */
+export function LevelPicker({
+  levels,
+  value,
+  onChange,
+  counts,
+}: {
+  levels: readonly EquippingLevel[];
+  value: EquippingLevel;
+  onChange: (level: EquippingLevel) => void;
+  counts?: Partial<Record<EquippingLevel, number>>;
+}) {
+  return (
+    <div role="group" aria-label="Level" className="flex flex-col gap-1.5">
+      <span className="field-label" aria-hidden="true">
+        Level
+      </span>
+      <div className="flex flex-wrap gap-2">
+        {levels.map((level) => (
+          <FilterChip key={level} pressed={level === value} onChange={() => onChange(level)}>
+            {LEVEL_LABELS[level]}
+            {counts?.[level] !== undefined ? ` · ${counts[level]}` : ''}
+          </FilterChip>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function TermPicker({ term, onChange }: { term: Term; onChange: (term: Term) => void }) {
   const id = useId();
   const year = new Date().getFullYear();

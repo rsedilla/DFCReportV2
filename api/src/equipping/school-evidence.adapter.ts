@@ -50,6 +50,8 @@ export class SchoolEvidenceAdapter implements SchoolEvidencePort {
       .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
       .select('p.posted_at')
       .where('r.person_id', 'in', [...personIds])
+      // A Life Class pass, never another level's (decision 0514).
+      .where('r.level', '=', 'LIFE_CLASS')
       .where('g.grade', '=', 'PASSED')
       .execute();
 

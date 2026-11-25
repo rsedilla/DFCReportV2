@@ -5,6 +5,7 @@ import { AuditModule } from '../audit/audit.module';
 import { AuthModule } from '../auth/auth.module';
 import { AuthorizationModule } from '../auth/authorization/authorization.module';
 import { CellsModule } from '../cells/cells.module';
+import { ConquestModule } from '../conquest/conquest.module';
 import { HierarchyModule } from '../hierarchy/hierarchy.module';
 import { PeopleModule } from '../people/people.module';
 import { SuynlModule } from '../suynl/suynl.module';
@@ -31,6 +32,7 @@ import { SchoolEvidenceAdapter } from './school-evidence.adapter';
     AttendanceModule,
     SuynlModule,
     TrainingModule,
+    ConquestModule,
     AuthModule,
     AuthorizationModule,
     AuditModule,

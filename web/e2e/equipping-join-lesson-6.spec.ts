@@ -29,7 +29,7 @@ async function registrar(page: Page, path: string, options: { lesson6Passed?: bo
 test('the Register form says they join a later class at Lesson 6', async ({ page }) => {
   await registrar(page, '/equipping/registration');
   await mockCandidate(page, true, true);
-  await page.getByRole('button', { name: 'Register a person' }).click();
+  await page.getByRole('button', { name: 'Register for Life Class' }).click();
   const dialog = page.getByRole('dialog', { name: 'Register for Life Class' });
   await dialog.getByLabel('Person').fill('wil');
   await dialog.getByRole('button', { name: 'Search' }).click();

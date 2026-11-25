@@ -24,8 +24,15 @@ import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date'
 
 import type { EquippingLevel } from '../../database/schema';
 
-/** The levels open for registration (SKILL.md section 29, decision 0499): Life Class first. */
-export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS'];
+/** The levels the school runs (SKILL.md section 29, decisions 0499 and 0514). */
+export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
+
+/** A level alone, for a read that names one: the registration form, the Guide search. */
+export class EquippingLevelDto {
+  @IsOptional()
+  @IsIn(EQUIPPING_LEVELS)
+  level?: EquippingLevel;
+}
 
 /** At most fifty people enrolled in one request, a class's size and more. */
 export const ENROLL_AT_ONCE = 50;
@@ -35,6 +42,21 @@ export class EquippingTermDto {
   @IsIn(EQUIPPING_LEVELS)
   level!: EquippingLevel;
 
+  @Type(() => Number)
+  @IsInt()
+  @Min(2020)
+  @Max(2100)
+  term_year!: number;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  term_number!: number;
+}
+
+/** A term alone, for the counts the Level picker shows (decision 0514). */
+export class EquippingTermOnlyDto {
   @Type(() => Number)
   @IsInt()
   @Min(2020)
@@ -64,16 +86,19 @@ export class ListRegistrationsDto extends EquippingTermDto {
 }
 
 /**
- * Registering a person (decision 0499, points 5 to 7). The two ticks must be ticked;
+ * Registering a person (decision 0499, points 5 to 7). Life Class's two ticks must be ticked;
  * `exception_reason` is required where a record requirement is not met, and the service
- * decides that, since only it reads the records.
+ * decides that, since only it reads the records. **SOL 1 has no Bible tick, and its manual is a
+ * requirement that warns** (decision 0514): left unticked, it is one the reason must cover.
  */
 export class RegisterDto extends EquippingTermDto {
   @IsUUID()
   person_id!: string;
 
+  /** Life Class only; a SOL 1 registration leaves it out. */
+  @IsOptional()
   @IsBoolean()
-  bible_confirmed!: boolean;
+  bible_confirmed?: boolean;
 
   @IsBoolean()
   manual_confirmed!: boolean;
@@ -137,8 +162,10 @@ export class OpenClassDto extends EquippingTermDto {
   @IsUUID()
   teacher_person_id?: string;
 
+  /** Life Class names its Encounter weekend; a SOL 1 class has none (decision 0514). */
+  @IsOptional()
   @IsUUID()
-  encounter_season_id!: string;
+  encounter_season_id?: string;
 }
 
 /**
@@ -222,6 +249,13 @@ export class EquippingSearchDto {
   @IsStorableText()
   @MaxLength(100)
   q!: string;
+}
+
+/** The Guide search names the level guided, one level ahead of it (decision 0514). */
+export class GuideSearchDto extends EquippingSearchDto {
+  @IsOptional()
+  @IsIn(EQUIPPING_LEVELS)
+  level?: EquippingLevel;
 }
 
 /**

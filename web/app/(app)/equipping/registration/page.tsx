@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { EquippingFrame, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
+import { EquippingFrame, LevelPicker, TermPicker, TextBox, Tick } from '@/components/equipping-frame';
 import { SearchResults } from '@/components/search-results';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
@@ -12,11 +12,14 @@ import { SearchField } from '@/components/ui/field';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
 import {
+  EQUIPPING_LEVELS,
+  LEVEL_LABELS,
   REQUIREMENT_LABELS,
   STATUS_LABELS,
   cancelRegistration,
   currentTerm,
   getCandidate,
+  getRegistrationCounts,
   listRegistrations,
   register,
   searchPeople,
@@ -33,16 +36,23 @@ import { describeFailure } from '@/lib/messages';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 
 /**
- * Registration (SKILL.md section 29, decision 0499, points 5 to 9): who has signed up for Life
- * Class this term, and the form that signs somebody up.
+ * Registration (SKILL.md section 29, decision 0499, points 5 to 9; decision 0514): who has signed
+ * up for a level this term, and the form that signs somebody up. A *Level* picker beside the Term
+ * says which level, with how many are registered for each.
  *
- * **Seven requirements.** Four are read from the records when the person is picked; the
- * Registrar ticks three after asking the person's leader. A record not met asks why they are
- * registered anyway, and they are registered with exception (point 7). Nothing records money.
+ * **Life Class's requirements.** Four are read from the records when the person is picked; the
+ * Registrar ticks two after asking the person's leader. **SOL 1's three**: Life Class passed and
+ * Win 3 read from the records, and the manual ticked in its own row. A requirement not met asks why
+ * they are registered anyway, and they are registered with exception (point 7). Nothing records
+ * money.
  */
 export default function RegistrationPage() {
   const [term, setTerm] = useState<Term>(() => currentTerm());
   const [open, setOpen] = useState(false);
+  const counts = useQuery({
+    queryKey: ['equipping', 'registrations', 'counts', term.term_year, term.term_number],
+    queryFn: ({ signal }) => getRegistrationCounts(term, signal),
+  });
 
   return (
     <EquippingFrame
@@ -52,15 +62,20 @@ export default function RegistrationPage() {
     >
       <div className={CONTROL_BAR}>
         <TermPicker term={term} onChange={setTerm} />
-        <p className="text-sm font-semibold">Life Class</p>
+        <LevelPicker
+          levels={EQUIPPING_LEVELS}
+          value={term.level}
+          onChange={(level) => setTerm({ ...term, level })}
+          counts={counts.data}
+        />
         <div className="lg:ml-auto">
           <Button type="button" onClick={() => setOpen(true)}>
-            Register a person
+            Register for {LEVEL_LABELS[term.level]}
           </Button>
         </div>
       </div>
-      {/* Keyed by the term, so another term starts on its first page. */}
-      <RegistrationList key={`${term.term_year}-${term.term_number}`} term={term} />
+      {/* Keyed by the term and level, so another starts on its first page. */}
+      <RegistrationList key={`${term.level}-${term.term_year}-${term.term_number}`} term={term} />
       <RegisterDialog term={term} open={open} onClose={() => setOpen(false)} />
     </EquippingFrame>
   );
@@ -87,14 +102,14 @@ function RegistrationList({ term }: { term: Term }) {
   if (list.data.data.length === 0) {
     return (
       <p className="text-muted mt-4 text-sm">
-        Nobody is registered for Life Class in {termLabel(term)} yet.
+        Nobody is registered for {LEVEL_LABELS[term.level]} in {termLabel(term)} yet.
       </p>
     );
   }
 
   return (
     <>
-      <Table caption={`Registered for Life Class, ${termLabel(term)}`} className="mt-4">
+      <Table caption={`Registered for ${LEVEL_LABELS[term.level]}, ${termLabel(term)}`} className="mt-4">
         <thead>
           <tr>
             <HeaderCell>Name</HeaderCell>
@@ -118,7 +133,13 @@ function RegistrationList({ term }: { term: Term }) {
                   {row.birthday_recorded ? 'birthday recorded' : 'birthday missing'}
                 </span>
                 {row.exception_reason ? (
-                  <p className="text-muted mt-1 text-sm">Why: {row.exception_reason}</p>
+                  <p className="text-muted mt-1 text-sm">
+                    {/* Which requirement was set aside, so the Admin reviewing it sees (decision 0514). */}
+                    {row.unmet && row.unmet.length > 0
+                      ? `Not met: ${row.unmet.map((code) => REQUIREMENT_LABELS[code]).join(', ')}. `
+                      : null}
+                    Why: {row.exception_reason}
+                  </p>
                 ) : null}
               </td>
               <td className="hidden px-3 py-3 align-top sm:table-cell">{row.leader_name ?? 'No leader yet'}</td>
@@ -237,20 +258,32 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
     enabled: searched !== null,
   });
   const candidate = useQuery({
-    queryKey: ['equipping', 'candidate', person?.id],
-    queryFn: ({ signal }) => getCandidate(person!.id, signal),
+    queryKey: ['equipping', 'candidate', person?.id, term.level],
+    queryFn: ({ signal }) => getCandidate(person!.id, term.level, signal),
     enabled: person !== null,
   });
-  const unmet = (candidate.data?.requirements ?? []).filter((each) => !each.met);
-  const ticked = bible && manual;
+  const sol = term.level !== 'LIFE_CLASS';
+  // SOL 1's manual is its third requirement, ticked in its own row, and warns (decision 0514).
+  const unmet = [
+    ...(candidate.data?.requirements ?? []).filter((each) => !each.met),
+    ...(sol && !manual ? [{ code: 'SOL_1_MANUAL' as const }] : []),
+  ];
+  const total = (candidate.data?.requirements.length ?? 0) + (sol ? 1 : 0);
+  const ticked = sol || (bible && manual);
   const needsReason = unmet.length > 0;
+  const today = new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'Asia/Manila',
+  }).format(new Date());
 
   const save = useMutation({
     mutationFn: () => {
       const body = {
         ...term,
         person_id: person!.id,
-        bible_confirmed: bible,
+        ...(sol ? {} : { bible_confirmed: bible }),
         manual_confirmed: manual,
         ...(needsReason ? { exception_reason: reason.trim() } : {}),
         ...(note.trim() ? { note: note.trim() } : {}),
@@ -284,10 +317,13 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
         reset();
         onClose();
       }}
-      title="Register for Life Class"
+      title={`Register for ${LEVEL_LABELS[term.level]}`}
     >
       <p className="text-muted text-sm">
-        {termLabel(term)} &middot; fees and the manual are paid outside DREAMS
+        {termLabel(term)} &middot;{' '}
+        {sol
+          ? `the ${LEVEL_LABELS[term.level]} manual is the tuition, paid outside DREAMS`
+          : 'fees and the manual are paid outside DREAMS'}
       </p>
 
       {person === null ? (
@@ -353,6 +389,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             <EarlierTries
               tries={candidate.data.earlier_tries}
               term={term}
+              level={LEVEL_LABELS[term.level]}
               joins={candidate.data.joins_at_lesson_6 ?? null}
             />
           ) : null}
@@ -364,7 +401,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
                 unmet.length > 0 ? (
                   <span className="text-field-invalid text-sm">
                     {' '}
-                    &middot; {unmet.length} of {candidate.data.requirements.length} not met
+                    &middot; {unmet.length} of {total} not met
                   </span>
                 ) : (
                   <span className="text-muted text-sm font-normal"> &middot; all met</span>
@@ -389,11 +426,29 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
                     </span>
                   </li>
                 ))}
+                {sol ? (
+                  <li className="border-line flex gap-3 px-3 py-2">
+                    <input
+                      id="sol-manual"
+                      type="checkbox"
+                      className="accent-accent mt-0.5 size-6 shrink-0"
+                      checked={manual}
+                      onChange={(event) => setManual(event.target.checked)}
+                    />
+                    <label htmlFor="sol-manual">
+                      <span className="font-semibold">{REQUIREMENT_LABELS.SOL_1_MANUAL}</span>
+                      <span className={manual ? 'text-muted block text-sm' : 'text-field-invalid block text-sm'}>
+                        {manual ? `Ticked by you, ${today}` : 'Not met · tick when they have it'}
+                      </span>
+                    </label>
+                  </li>
+                ) : null}
               </ul>
             ) : (
               <FailureNotice failure={describeFailure(candidate.error)} />
             )}
-            {candidate.data && candidate.data.birth_date === null ? (
+            {/* SOL has no Encounter, so no birthday is needed (decision 0514). */}
+            {candidate.data && candidate.data.birth_date === null && !sol ? (
               <p className="border-line mt-3 flex gap-3 rounded-lg border border-l-4 px-4 py-3 text-sm">
                 <span aria-hidden="true" className="font-bold">
                   !
@@ -406,6 +461,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
             ) : null}
           </section>
 
+          {sol ? null : (
           <fieldset>
             <legend className="font-semibold">Ask {candidate.data?.leader_name ?? 'their leader'}, then tick</legend>
             <div className="mt-2 grid gap-2 lg:grid-cols-2">
@@ -420,6 +476,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
               <p className="text-field-invalid mt-2 text-sm">Both are ticked before registering.</p>
             ) : null}
           </fieldset>
+          )}
 
           {needsReason ? (
             <TextBox
@@ -468,10 +525,12 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
 function EarlierTries({
   tries,
   term,
+  level,
   joins,
 }: {
   tries: NonNullable<Candidate['earlier_tries']>;
   term: Term;
+  level: string;
   joins: KeptFrom | null;
 }) {
   // Counted as the lists count it: the terms before this registration's, a term one try (0511).
@@ -486,7 +545,7 @@ function EarlierTries({
   return (
     <section aria-labelledby="earlier-tries-heading" className="border-line rounded-lg border p-3 text-sm">
       <h3 id="earlier-tries-heading" className="font-semibold">
-        Took Life Class before
+        Took {level} before
       </h3>
       <ul className="mt-1">
         {tries.map((each) => (

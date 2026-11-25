@@ -298,6 +298,22 @@
       "screen": "web/components/person-account.tsx"
     },
     {
+      "route": "POST /api/v1/accounts/:id/coordinates-sol-1",
+      "screen": "web/components/person-account.tsx"
+    },
+    {
+      "route": "GET /api/v1/accounts/coordinators",
+      "screen": "web/app/(app)/admin/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/coordinate/levels",
+      "screen": "web/app/(app)/equipping/classes/page.tsx"
+    },
+    {
+      "route": "GET /api/v1/equipping/registrations/counts",
+      "screen": "web/app/(app)/equipping/registration/page.tsx"
+    },
+    {
       "route": "GET /api/v1/reports/recording-status",
       "screen": "web/components/recording-status.tsx"
     },

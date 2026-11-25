@@ -54,6 +54,25 @@ export class ConquestService {
     return { authorization: this.authorization, hierarchy: this.hierarchy, people: this.people };
   }
 
+  /**
+   * **Win 3 for each person, as this tab derives it** (section 27, decision 0250), for the
+   * school's SOL 1 requirement (section 29, decisions 0501 and 0514): whether it has been
+   * reached, which stays reached, and nothing else. How many of their disciples stand at a third
+   * SUYNL lesson is not handed out: the Registrar is told the rule and never the count, which
+   * this tab shows to holders of `conquest.view_subtree` (owner ruling of 2026-11-25, decision
+   * 0514 point 5). Read as things stand now, as a requirement is read once, at registration
+   * (point 18). Keyed by the canonical id asked about; no scope narrows it, the school's guard
+   * deciding who asks.
+   */
+  async win3Of(personIds: readonly string[]): Promise<Map<string, { reached: boolean }>> {
+    const ids = uniqueIds(personIds.map((id) => canonicalId(id)));
+    const now = await databaseNow(this.db);
+    const goals = await this.goalsOf(ids, now);
+    return new Map(
+      ids.map((id) => [id, { reached: (goals.get(id)?.WIN_3?.reachedAt ?? null) !== null }]),
+    );
+  }
+
   /** `GET /api/v1/conquest/counts`: the four cards, as things stand now. */
   async counts(actor: Actor): Promise<Record<string, unknown>> {
     const { people: population } = await growthPopulation(

@@ -28,6 +28,8 @@ export interface PersonAccount {
   moves_people: boolean;
   /** Life Class Coordinator (decision 0501); meaningful on a Leader account only. */
   coordinates_life_class?: boolean;
+  /** SOL 1 Coordinator (decision 0514); meaningful on a Leader account only. */
+  coordinates_sol_1?: boolean;
   /**
    * When the holder ticked the Privacy Notice in force, or null where they have not (decision
    * 0496). Absent from a server that predates it.
@@ -160,6 +162,30 @@ export async function setMovesPeople(
   });
 }
 
+/** Ticks or clears SOL 1 Coordinator on a Leader account (decision 0514). Needs `roles.manage`. */
+export function setCoordinatesSol1(
+  accountId: string,
+  coordinates: boolean,
+  idempotencyKey: string,
+): Promise<{ id: string; coordinates_sol_1: boolean }> {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/coordinates-sol-1`, {
+    method: 'POST',
+    body: { coordinates_sol_1: coordinates },
+    idempotencyKey,
+  });
+}
+
+/** One level's Coordinators, for the Admin's Coordinators list (decision 0514). */
+export interface LevelCoordinators {
+  level: 'LIFE_CLASS' | 'SOL_1';
+  people: { account_id: string; person_id: string; name: string }[];
+}
+
+/** Who coordinates each level (decision 0514), the Admin's alone. */
+export function getCoordinators(): Promise<{ data: LevelCoordinators[] }> {
+  return authenticatedRequest('/api/v1/accounts/coordinators');
+}
+
 /** Ticks or clears Life Class Coordinator on a Leader account (decision 0501). Needs `roles.manage`. */
 export async function setCoordinatesLifeClass(
   accountId: string,
@@ -209,6 +235,7 @@ export interface AccountListRow {
   approves_cells: boolean;
   moves_people: boolean;
   coordinates_life_class?: boolean;
+  coordinates_sol_1?: boolean;
 }
 
 export async function listAccounts(
