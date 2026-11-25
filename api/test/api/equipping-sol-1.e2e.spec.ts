@@ -190,8 +190,8 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
     disciples.push(don);
   };
 
-  /** Wil reaches Win 3: each of his three disciples has three SUYNL lessons. */
-  const giveWinThree = async () => {
+  /** Wil reaches Win 3: each of his three disciples has three SUYNL lessons, filed at `filedAt`. */
+  const giveWinThree = async (filedAt?: Date) => {
     if (disciples.length < 3) {
       await giveThirdDisciple();
     }
@@ -199,7 +199,13 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       for (const lesson of [1, 2, 3]) {
         await db
           .insertInto('suynl_lessons')
-          .values({ person_id: disciple.id, lesson, confirmed_by: wil.id, recorded_by: admin.id })
+          .values({
+            person_id: disciple.id,
+            lesson,
+            confirmed_by: wil.id,
+            recorded_by: admin.id,
+            ...(filedAt === undefined ? {} : { confirmed_at: filedAt }),
+          })
           .execute();
       }
     }
@@ -398,6 +404,22 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       await giveLifeClass(wil);
       const registered = await register({ manual_confirmed: true }).expect(201);
       expect(registered.body).toEqual(expect.objectContaining({ status: 'REGISTERED', unmet: [] }));
+    });
+
+    it('meets it by Win 3 reached, after a disciple has left', async () => {
+      // Filed a day before the disciple leaves, so Win 3 is reached first whatever the clock.
+      await giveWinThree(new Date(Date.now() - 24 * 60 * 60 * 1000));
+      await db
+        .updateTable('pastoral_assignments')
+        .set({ ended_at: sql`now()` })
+        .where('person_id', '=', disciples[2].id)
+        .where('ended_at', 'is', null)
+        .execute();
+      // A disciple who leaves still counts toward a Win 3 already reached (section 27).
+      expect(await requirements()).toEqual([
+        expect.objectContaining({ code: 'LIFE_CLASS_PASSED' }),
+        { code: 'WIN_3', met: true, detail: 'Win 3 reached' },
+      ]);
     });
 
     it('counts only disciples under them now: an ended assignment is not one', async () => {

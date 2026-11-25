@@ -364,7 +364,8 @@ export class EquippingService {
       ids.length === 0
         ? Promise.resolve([])
         : this.db
-            .selectFrom('equipping_final_grades as g')
+            // The grade as it stands, a change after posting included (decision 0513).
+            .selectFrom('equipping_current_grades as g')
             .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
             .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
             .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')

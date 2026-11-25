@@ -41,8 +41,8 @@ import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
  * says which level, with how many are registered for each.
  *
  * **Life Class's requirements.** Four are read from the records when the person is picked; the
- * Registrar ticks two after asking the person's leader. **SOL 1's three**: Life Class passed and
- * Win 3 read from the records, and the manual ticked in its own row. A requirement not met asks why
+ * Registrar ticks two after asking the person's leader. **SOL 1's three**: Life Class passed, and
+ * Win 3 or three direct disciples now, read from the records, and the manual ticked in its own row. A requirement not met asks why
  * they are registered anyway, and they are registered with exception (point 7). Nothing records
  * money.
  */

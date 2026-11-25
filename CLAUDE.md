@@ -1061,7 +1061,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-17 — [*# of People* counts Cell Members, Cell Leaders and those Not in a Cell](docs/decisions/0498-number-of-people-counts-cell-members-cell-leaders-and-those-not-in-a-cell.md)
 - 2026-11-17 — [Equipping: registration and enrollment for Life Class](docs/decisions/0499-equipping-registration-and-enrollment-for-life-class.md)
 - 2026-11-20 — [Every dialog has a close button and keeps its buttons in view](docs/decisions/0500-every-dialog-has-a-close-button-and-keeps-its-buttons-in-view.md)
-- 2026-11-20 — [Equipping: the school from the class to the final grade, and SOL 1 to 3](docs/decisions/0501-equipping-the-school-from-the-class-to-the-final-grade-and-sol-1-to-3.md)
+- 2026-11-20 — [Equipping: the school from the class to the final grade, and SOL 1 to 3](docs/decisions/0501-equipping-the-school-from-the-class-to-the-final-grade-and-sol-1-to-3.md), point 18 amended by decision 0514 on 2026-11-25
 - 2026-11-20 — [A Guide pairing ends with the enrollment, and an archived Guide takes no new students](docs/decisions/0502-a-guide-pairing-ends-with-the-enrollment-and-an-archived-guide-takes-no-new-students.md)
 - 2026-11-20 — [A lesson is dated weekly from the first, and the Teacher may change the date](docs/decisions/0503-a-lesson-is-dated-weekly-from-the-first-and-the-teacher-may-change-the-date.md)
 - 2026-11-22 — [A leader reads their people in the school through their People access](docs/decisions/0504-a-leader-reads-their-people-in-the-school-through-their-people-access.md)
