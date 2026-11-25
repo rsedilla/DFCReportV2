@@ -654,11 +654,49 @@ export interface GradesStatus {
   posted: { at: string } | null;
 }
 
+/** What a change after posting sets a lesson to, and why (decision 0513). */
+export type GradeChangeTo = 'CAME' | 'ABSENT' | 'MADE_UP';
+export type GradeChangeWhy = 'MADE_UP_AFTER_POSTING' | 'RECORDED_WRONGLY';
+export type GradeChangeSign = GradeChangeTo | 'BEFORE_JOINING';
+
+/**
+ * The Encounter the grade as it stood read, and what it reads now, where they differ (decision
+ * 0513, point 14). The grade reads it as attended or not, so `before` is that alone.
+ */
+export interface EncounterChange {
+  before: 'CAME' | 'NOT_CAME';
+  now: 'CAME' | 'MISSED' | 'ENROLLED' | 'NONE';
+}
+
+/** What a change does to the graded enrollment (decision 0513, point 10). */
+export type EnrollmentEffect = 'ENDS' | 'REOPENS';
+
+/** One change of a posted grade, as its history lists it (decision 0513). */
+export interface GradeChange {
+  at: string;
+  by: string | null;
+  lesson: number;
+  sign_before: GradeChangeSign;
+  made_up_on_before: string | null;
+  sign_after: GradeChangeTo;
+  made_up_on_after: string | null;
+  why: GradeChangeWhy;
+  details: string;
+  grade_before: FinalGrade;
+  reason_before: string;
+  grade_after: FinalGrade;
+  reason_after: string;
+  encounter_change?: EncounterChange | null;
+  enrollment?: EnrollmentEffect | null;
+}
+
 export interface ClassGrades {
   class: { id: string; name: string; day_of_week: number; time_of_day: string; place: string | null };
   status: GradesStatus;
   may_check: boolean;
   checks_as: 'ADMIN' | 'COORDINATOR';
+  /** The Admin, on a posted class (decision 0513). */
+  may_change?: boolean;
   fingerprint: string;
   students: {
     enrollment_id: string;
@@ -669,7 +707,74 @@ export interface ClassGrades {
     lessons_made_up: number;
     lessons: EncounterSign[];
     your_disciple: boolean;
+    /** Once posted (decision 0513). */
+    final_grade_id?: string;
+    changes_seen?: number;
+    changeable?: {
+      lessons: {
+        lesson: number;
+        sign: GradeChangeSign;
+        made_up_on: string | null;
+        held_on: string;
+        /** Recorded in another class: one left this term, or the term it was kept from. */
+        recorded_in?: string | null;
+        /** Kept from an earlier term, where a change keeps the join at Lesson 6 (point 12). */
+        kept?: boolean;
+      }[];
+      why: string | null;
+    };
+    encounter_change?: EncounterChange | null;
+    history?: GradeChange[];
   }[];
+}
+
+/** What a change would make the grade (decision 0513). */
+export interface GradeChangePreview {
+  lesson: number;
+  sign_before: GradeChangeSign;
+  made_up_on_before: string | null;
+  grade_before: FinalGrade;
+  reason_before: string;
+  grade_after: FinalGrade;
+  reason_after: string;
+  joins_at_lesson_6_after: boolean;
+  training: 'FILES' | 'WITHDRAWS' | null;
+  encounter_change?: EncounterChange | null;
+  enrollment?: EnrollmentEffect | null;
+}
+
+export async function previewGradeChange(
+  finalGradeId: string,
+  input: { lesson: number; to: GradeChangeTo; made_up_on?: string },
+  signal?: AbortSignal,
+): Promise<GradeChangePreview> {
+  const query = new URLSearchParams({ lesson: String(input.lesson), to: input.to });
+  if (input.made_up_on !== undefined) {
+    query.set('made_up_on', input.made_up_on);
+  }
+  return authenticatedRequest(
+    `/api/v1/equipping/final-grades/grades/${encodeURIComponent(finalGradeId)}/change-preview?${query.toString()}`,
+    { signal },
+  );
+}
+
+export async function changeGrade(
+  finalGradeId: string,
+  body: {
+    lesson: number;
+    to: GradeChangeTo;
+    made_up_on?: string;
+    why: GradeChangeWhy;
+    details: string;
+    changes_seen: number;
+  },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/final-grades/grades/${encodeURIComponent(finalGradeId)}/changes`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
 }
 
 export async function listFinalGradeClasses(

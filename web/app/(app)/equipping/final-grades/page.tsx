@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { EquippingFrame, TermPicker } from '@/components/equipping-frame';
 import { GradesPanel, phaseWords } from '@/components/final-grades';
+import { GradeChangeDialog } from '@/components/grade-change-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -84,7 +85,32 @@ function ClassView({ classId }: { classId: string }) {
   if (!read.data) {
     return <p className="text-muted text-sm">Loading…</p>;
   }
-  return <GradesPanel data={read.data} coordinatorView={false} action={<PostButton data={read.data} />} />;
+  return <ClassGradesView data={read.data} />;
+}
+
+/** The grades, with the Admin's *Change…* on a posted class (decision 0513). */
+function ClassGradesView({ data }: { data: ClassGrades }) {
+  const [changing, setChanging] = useState<string | null>(null);
+  const student = data.students.find((s) => s.enrollment_id === changing) ?? null;
+  return (
+    <>
+      <GradesPanel
+        data={data}
+        coordinatorView={false}
+        action={<PostButton data={data} />}
+        onChange={(s) => setChanging(s.enrollment_id)}
+      />
+      {student ? (
+        <GradeChangeDialog
+          key={student.enrollment_id}
+          open
+          onClose={() => setChanging(null)}
+          student={student}
+          className={data.class.name}
+        />
+      ) : null}
+    </>
+  );
 }
 
 function PostButton({ data }: { data: ClassGrades }) {
@@ -101,7 +127,13 @@ function PostButton({ data }: { data: ClassGrades }) {
   });
   const { phase, counts } = data.status;
   if (phase === 'POSTED') {
-    return <p className="text-sm font-semibold">Posted. A change now is made by the Admin, with a reason.</p>;
+    return (
+      <p className="text-sm font-semibold">
+        {data.may_change
+          ? 'Posted. Only the Admin changes a lesson after posting, with a reason. Every change is kept.'
+          : 'Posted. A change now is made by the Admin, with a reason.'}
+      </p>
+    );
   }
   return (
     <>
