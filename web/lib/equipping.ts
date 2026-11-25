@@ -37,6 +37,14 @@ export interface Term {
 }
 
 /** The four record requirements, in the words the form shows (decision 0499, point 6). */
+/**
+ * The name a school list shows in its name column, last name first (decision 0515): *Aquino,
+ * Tomas R.* A sentence or a dialog's title keeps `full_name`.
+ */
+export function listName(person: { full_name: string | null; list_name?: string | null }): string | null {
+  return person.list_name ?? person.full_name;
+}
+
 export const REQUIREMENT_LABELS: Record<RequirementCode, string> = {
   HAS_LEADER: 'Has a leader',
   CELL_REGULAR: 'Regular in a Cell Group',
@@ -97,7 +105,7 @@ export interface KeptFrom {
 
 export interface Registration {
   id: string;
-  person: { id: string; member_id: string | null; full_name: string | null };
+  person: { id: string; member_id: string | null; full_name: string | null; list_name?: string | null };
   leader_name: string | null;
   birthday_recorded: boolean;
   status: RegistrationStatus;
@@ -148,7 +156,7 @@ export interface CoordinatedClass extends EquippingClass {
 /** One enrolled student as the Coordinator's *Students* shows them (decision 0501). */
 export interface ClassStudent {
   enrollment_id: string;
-  person: { id: string; full_name: string | null };
+  person: { id: string; full_name: string | null; list_name?: string | null };
   sex: 'MALE' | 'FEMALE' | null;
   cell_leader: { id: string; full_name: string | null } | null;
   guide: { id: string; full_name: string | null } | null;
@@ -156,7 +164,7 @@ export interface ClassStudent {
 
 export interface ClassGuide {
   id: string;
-  person: { id: string; full_name: string | null };
+  person: { id: string; full_name: string | null; list_name?: string | null };
   sex: 'MALE' | 'FEMALE' | null;
   /** Archived since being named: keeps their students and takes no new ones (decision 0502). */
   archived?: boolean;
@@ -181,11 +189,11 @@ export interface ClassDetail {
   enrolled: {
     enrollment_id: string;
     registration_id: string;
-    person: { id: string; full_name: string | null };
+    person: { id: string; full_name: string | null; list_name?: string | null };
   }[];
   ready: {
     registration_id: string;
-    person: { id: string; full_name: string | null };
+    person: { id: string; full_name: string | null; list_name?: string | null };
     leader_name: string | null;
     with_exception: boolean;
     birthday_recorded: boolean;
@@ -517,7 +525,7 @@ export async function listMyClasses(signal?: AbortSignal): Promise<{ data: MyCla
 /** One of the reader's people in the school, read only (decisions 0501 and 0504). */
 export interface MyPerson {
   enrollment_id: string;
-  person: { id: string; full_name: string | null };
+  person: { id: string; full_name: string | null; list_name?: string | null };
   level: string;
   /** One of the reader's twelve. */
   twelve: boolean;
@@ -551,7 +559,7 @@ export interface ClassLesson {
 
 export interface AttendanceStudent {
   enrollment_id: string;
-  person: { id: string; full_name: string | null };
+  person: { id: string; full_name: string | null; list_name?: string | null };
   cell_leader: { id: string; full_name: string | null } | null;
   guide: { id: string; full_name: string | null } | null;
   /** The day they joined this class (decision 0503). */
@@ -588,7 +596,7 @@ export interface ClassAttendance {
   students: AttendanceStudent[];
   owed: {
     enrollment_id: string;
-    person: { id: string; full_name: string | null };
+    person: { id: string; full_name: string | null; list_name?: string | null };
     cell_leader: { id: string; full_name: string | null } | null;
     lesson: number;
     held_on: string | null;
@@ -640,7 +648,7 @@ export interface EncounterList {
   phase?: 'ENROLLING' | 'RECORDING';
   students?: {
     enrollment_id: string;
-    person: { id: string; full_name: string | null };
+    person: { id: string; full_name: string | null; list_name?: string | null };
     class: { id: string; name: string };
     cell_leader: { id: string; full_name: string | null } | null;
     status: EncounterStatus;
@@ -653,7 +661,7 @@ export interface EncounterList {
   waiting?: { class: { id: string; name: string }; lesson_4_on: string }[];
   enrolled?: {
     encounter_enrollment_id: string;
-    person: { id: string; full_name: string | null };
+    person: { id: string; full_name: string | null; list_name?: string | null };
     class: { id: string; name: string };
     came: boolean | null;
   }[];
@@ -757,7 +765,7 @@ export interface ClassGrades {
   fingerprint: string;
   students: {
     enrollment_id: string;
-    person: { id: string; full_name: string | null };
+    person: { id: string; full_name: string | null; list_name?: string | null };
     grade: FinalGrade;
     reason: string;
     lessons_kept: number;

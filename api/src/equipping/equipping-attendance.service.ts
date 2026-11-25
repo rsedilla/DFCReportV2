@@ -30,6 +30,7 @@ import { resolverOf } from '../common/merged-identity';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel } from '../database/schema';
 import type { RecordMakeUpDto, SaveLessonDto } from './dto/equipping.dto';
+import { bySchoolName, schoolPerson } from './school-order';
 
 /**
  * Life Class's weekly lessons: 1 to 4 and 6 to 9. Lesson 5 is the Encounter, whose enrollment
@@ -435,7 +436,7 @@ export class EquippingAttendanceService {
         const register = registers.get(row.enrollment_id)!;
         return {
           enrollment_id: row.enrollment_id,
-          person: { id: row.person_id, full_name: nameOf(row.person_id) },
+          person: schoolPerson(row.person_id, names),
           cell_leader: leaderId ? { id: leaderId, full_name: nameOf(leaderId) } : null,
           guide: row.guide_person_id
             ? { id: row.guide_person_id, full_name: nameOf(row.guide_person_id) }
@@ -461,8 +462,8 @@ export class EquippingAttendanceService {
           }),
         };
       })
-      // First-name order, as every list of people (decision 0359).
-      .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? ''));
+      // Last-name order, as every school list (decision 0515).
+      .sort(bySchoolName(names));
 
     const owed = students.flatMap((student) =>
       student.marks

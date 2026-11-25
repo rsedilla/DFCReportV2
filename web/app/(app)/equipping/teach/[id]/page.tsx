@@ -22,6 +22,7 @@ import {
   type ClassAttendance,
   type ClassLesson,
   type LessonState,
+  listName,
 } from '@/lib/equipping';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
@@ -184,7 +185,7 @@ function MissedTwice({ data }: { data: ClassAttendance }) {
       <ul className="mt-2 flex flex-col gap-1 text-sm">
         {missing.map(({ student, lessons }) => (
           <li key={student.enrollment_id}>
-            <span className="font-semibold">{student.person.full_name}</span> · L{lessons[0]} and L{lessons[1]} ·
+            <span className="font-semibold">{listName(student.person)}</span> · L{lessons[0]} and L{lessons[1]} ·
             Cell leader {student.cell_leader?.full_name ?? 'none'}
           </li>
         ))}
@@ -342,7 +343,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                     onChange={(event) => toggle(s.enrollment_id, event.target.checked)}
                   />
                   <span>
-                    <span className="block font-semibold">{s.person.full_name}</span>
+                    <span className="block font-semibold">{listName(s.person)}</span>
                     <span className="text-muted block text-xs">
                       Cell leader {s.cell_leader?.full_name ?? 'none'} · Guide {s.guide?.full_name ?? 'none yet'}
                     </span>
@@ -389,7 +390,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                     </label>
                   </td>
                   <th scope="row" className="px-3 py-2 text-left font-semibold">
-                    {s.person.full_name}
+                    {listName(s.person)}
                     {missedElsewhere(s, lesson.lesson) ? (
                       <span className="text-muted block text-xs font-normal">
                         Missed it in {missedElsewhere(s, lesson.lesson)}; tick if they came here
@@ -518,7 +519,7 @@ function LessonRead({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
             const mark = markFor(s, lesson.lesson);
             return (
               <li key={s.enrollment_id} className="border-line flex justify-between gap-3 border-t py-2 text-sm">
-                <span className="font-semibold">{s.person.full_name}</span>
+                <span className="font-semibold">{listName(s.person)}</span>
                 <span className={mark && !mark.came && !mark.made_up_on ? 'text-field-invalid font-semibold' : ''}>
                   {mark === null
                     ? 'Not marked'
@@ -564,7 +565,7 @@ function Owed({ data }: { data: ClassAttendance }) {
             className="border-line flex flex-wrap items-center justify-between gap-3 border-t py-2"
           >
             <span>
-              <span className="font-semibold">{each.person.full_name}</span> · L{each.lesson}
+              <span className="font-semibold">{listName(each.person)}</span> · L{each.lesson}
               {each.before_joining
                 ? ', held before they joined'
                 : each.held_on
@@ -697,7 +698,7 @@ function Register({ data }: { data: ClassAttendance }) {
                 return (
                   <tr key={s.enrollment_id} className="border-line border-t">
                     <th scope="row" className="px-2 py-2 text-left font-semibold whitespace-nowrap">
-                      {s.person.full_name}
+                      {listName(s.person)}
                       {moved.length > 0 ? (
                         <span className="text-muted block text-xs font-normal">
                           Moved from {[...new Set(moved.map((m) => m.from_class!.name))].join(', ')} ·{' '}

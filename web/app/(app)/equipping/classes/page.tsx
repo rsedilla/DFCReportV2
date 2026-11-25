@@ -41,6 +41,7 @@ import {
   type EquippingLevel,
   type FoundPerson,
   type Term,
+  listName,
 } from '@/lib/equipping';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { shortDate } from '@/lib/lifecycle';
@@ -1024,7 +1025,7 @@ function StudentRow({ each, guides }: { each: ClassStudent; guides: ClassGuide[]
   const otherSex = current !== undefined && each.sex !== null && current.sex !== each.sex;
   return (
     <li className="border-line border-b py-2 text-sm last:border-b-0">
-      <p className="font-semibold">{each.person.full_name}</p>
+      <p className="font-semibold">{listName(each.person)}</p>
       <p className="text-muted">
         Cell leader: {each.cell_leader?.full_name ?? 'none'} · Guide:{' '}
         {each.guide ? each.guide.full_name : <span className="text-field-invalid font-semibold">No Guide yet</span>}

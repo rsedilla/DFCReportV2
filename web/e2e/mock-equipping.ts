@@ -11,6 +11,17 @@ function json(body: unknown, status = 200) {
 
 const CLASS_ID = '3f1b7c6e-0000-4000-8000-00000000e001';
 
+/** A name last name first, as the API's `list_name` (decision 0515): "Tomas Aquino" is "Aquino, Tomas". */
+function lastNameFirst(name: string): string {
+  const parts = name.split(' ');
+  return `${parts[parts.length - 1]}, ${parts.slice(0, -1).join(' ')}`;
+}
+
+/** A school list's order: by last name (decision 0515). */
+function byLastName(a: { person: { list_name: string } }, b: { person: { list_name: string } }): number {
+  return a.person.list_name.localeCompare(b.person.list_name);
+}
+
 /** The signed-in account as a Registrar: `EQUIPPING` screens and `equipping.manage` alone. */
 export async function mockRegistrar(page: Page): Promise<void> {
   await page.route('**/api/v1/auth/me', (route) =>
@@ -59,7 +70,7 @@ export async function mockEquipping(
         data: [
           {
             id: '3f1b7c6e-0000-4000-8000-00000000e101',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000e201', member_id: 'M-000951', full_name: 'Carlito Manalo' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000e201', member_id: 'M-000951', full_name: 'Carlito Manalo', list_name: 'Manalo, Carlito' },
             leader_name: 'Benito Cruz',
             birthday_recorded: false,
             status: 'REGISTERED_WITH_EXCEPTION',
@@ -74,7 +85,7 @@ export async function mockEquipping(
           },
           {
             id: '3f1b7c6e-0000-4000-8000-00000000e102',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000e202', member_id: 'M-000952', full_name: 'Danica Flores' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000e202', member_id: 'M-000952', full_name: 'Danica Flores', list_name: 'Flores, Danica' },
             leader_name: 'Mila Tan',
             birthday_recorded: true,
             status: 'ENROLLED',
@@ -132,13 +143,13 @@ export async function mockEquipping(
           {
             enrollment_id: '3f1b7c6e-0000-4000-8000-00000000e301',
             registration_id: '3f1b7c6e-0000-4000-8000-00000000e102',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000e202', full_name: 'Danica Flores' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000e202', full_name: 'Danica Flores', list_name: 'Flores, Danica' },
           },
         ],
         ready: [
           {
             registration_id: '3f1b7c6e-0000-4000-8000-00000000e103',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000e204', full_name: 'Ernesto Lim' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000e204', full_name: 'Ernesto Lim', list_name: 'Lim, Ernesto' },
             leader_name: 'Benito Cruz',
             with_exception: false,
             birthday_recorded: true,
@@ -149,7 +160,7 @@ export async function mockEquipping(
           },
           {
             registration_id: '3f1b7c6e-0000-4000-8000-00000000e101',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000e201', full_name: 'Carlito Manalo' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000e201', full_name: 'Carlito Manalo', list_name: 'Manalo, Carlito' },
             leader_name: 'Benito Cruz',
             with_exception: true,
             birthday_recorded: false,
@@ -304,7 +315,7 @@ export async function mockClassGuides(page: Page): Promise<{ sent: { url: string
     // Archived since being named: keeps any students, takes no new ones (decision 0502).
     {
       id: '3f1b7c6e-0000-4000-8000-00000000a103',
-      person: { id: '3f1b7c6e-0000-4000-8000-00000000a203', full_name: 'Rogelio Santos' },
+      person: { id: '3f1b7c6e-0000-4000-8000-00000000a203', full_name: 'Rogelio Santos', list_name: 'Santos, Rogelio' },
       sex: 'MALE',
       archived: true,
     },
@@ -317,21 +328,21 @@ export async function mockClassGuides(page: Page): Promise<{ sent: { url: string
         data: [
           {
             enrollment_id: '3f1b7c6e-0000-4000-8000-00000000a301',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000a401', full_name: 'Efren Quiambao' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000a401', full_name: 'Efren Quiambao', list_name: 'Quiambao, Efren' },
             sex: 'MALE',
             cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000a501', full_name: 'Gilbert Manalo' },
             guide: { id: GUIDE_BENJIE, full_name: 'Benjie Lacson' },
           },
           {
             enrollment_id: '3f1b7c6e-0000-4000-8000-00000000a302',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000a402', full_name: 'Hernan Ocampo' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000a402', full_name: 'Hernan Ocampo', list_name: 'Ocampo, Hernan' },
             sex: 'MALE',
             cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000a501', full_name: 'Gilbert Manalo' },
             guide: { id: GUIDE_BENJIE, full_name: 'Benjie Lacson' },
           },
           {
             enrollment_id: '3f1b7c6e-0000-4000-8000-00000000a303',
-            person: { id: '3f1b7c6e-0000-4000-8000-00000000a403', full_name: 'Imelda Tolentino' },
+            person: { id: '3f1b7c6e-0000-4000-8000-00000000a403', full_name: 'Imelda Tolentino', list_name: 'Tolentino, Imelda' },
             sex: 'FEMALE',
             cell_leader: null,
             guide: null,
@@ -519,7 +530,7 @@ export async function mockClassAttendance(
   // Moved from Life Class B too, where he missed lesson 3: ticked here only if he came here.
   const paz = {
     enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b305',
-    person: { id: '3f1b7c6e-0000-4000-8000-00000000b405', full_name: 'Paz Ocampo' },
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b405', full_name: 'Paz Ocampo', list_name: 'Ocampo, Paz' },
     cell_leader: null,
     guide: null,
     joined_on: '2026-11-15',
@@ -527,7 +538,7 @@ export async function mockClassAttendance(
   };
   const rosa = {
     enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b303',
-    person: { id: '3f1b7c6e-0000-4000-8000-00000000b403', full_name: 'Rosa Villanueva' },
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b403', full_name: 'Rosa Villanueva', list_name: 'Villanueva, Rosa' },
     cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b502', full_name: 'Lorna Bautista' },
     guide: null,
     joined_on: '2026-11-15',
@@ -540,7 +551,7 @@ export async function mockClassAttendance(
   };
   const tomas = {
     enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b304',
-    person: { id: '3f1b7c6e-0000-4000-8000-00000000b404', full_name: 'Tomas Aquino' },
+    person: { id: '3f1b7c6e-0000-4000-8000-00000000b404', full_name: 'Tomas Aquino', list_name: 'Aquino, Tomas' },
     cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
     guide: null,
     joined_on: '2026-11-15',
@@ -594,7 +605,7 @@ export async function mockClassAttendance(
     students: [
       {
         enrollment_id: STUDENT_EFREN,
-        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao' },
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao', list_name: 'Quiambao, Efren' },
         cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
         guide: { id: '3f1b7c6e-0000-4000-8000-00000000b601', full_name: 'Benjie Lacson' },
         joined_on: '2026-11-01',
@@ -603,7 +614,7 @@ export async function mockClassAttendance(
       },
       {
         enrollment_id: STUDENT_IMELDA,
-        person: { id: '3f1b7c6e-0000-4000-8000-00000000b402', full_name: 'Imelda Tolentino' },
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b402', full_name: 'Imelda Tolentino', list_name: 'Tolentino, Imelda' },
         cell_leader: null,
         guide: null,
         joined_on: '2026-11-01',
@@ -616,7 +627,7 @@ export async function mockClassAttendance(
         ? [
             {
               enrollment_id: '3f1b7c6e-0000-4000-8000-00000000b306',
-              person: { id: '3f1b7c6e-0000-4000-8000-00000000b406', full_name: 'Ramil Cruz' },
+              person: { id: '3f1b7c6e-0000-4000-8000-00000000b406', full_name: 'Ramil Cruz', list_name: 'Cruz, Ramil' },
               cell_leader: null,
               guide: null,
               joined_on: '2026-11-01',
@@ -635,7 +646,7 @@ export async function mockClassAttendance(
     owed: [
       {
         enrollment_id: STUDENT_EFREN,
-        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao' },
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao', list_name: 'Quiambao, Efren' },
         cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
         lesson: 2,
         held_on: '2026-11-10',
@@ -761,13 +772,13 @@ export async function mockEncounter(
     enrolled: [
       {
         encounter_enrollment_id: id(5001),
-        person: { id: id(8101), full_name: 'Jose Bautista' },
+        person: { id: id(8101), full_name: 'Jose Bautista', list_name: 'Bautista, Jose' },
         class: classC,
         came: phase === 'RECORDING' ? true : null,
       },
       {
         encounter_enrollment_id: id(5002),
-        person: { id: id(8102), full_name: 'Wilfredo Tan' },
+        person: { id: id(8102), full_name: 'Wilfredo Tan', list_name: 'Tan, Wilfredo' },
         class: classA,
         came: null,
       },
@@ -826,7 +837,7 @@ export async function mockFinalGrades(
     disciple = false,
   ) => ({
     enrollment_id: id(7100 + n),
-    person: { id: id(8100 + n), full_name: name },
+    person: { id: id(8100 + n), full_name: name, list_name: lastNameFirst(name) },
     grade,
     reason,
     lessons_kept: kept,
@@ -856,7 +867,8 @@ export async function mockFinalGrades(
         true,
       ),
       student(5, 'Tomas Aquino', 'PASSED', 'Every lesson done.', [C, C, C, C, C, C, C, C, C], 9, 0),
-    ],
+      // In last-name order, as the API sends a school list (decision 0515).
+    ].sort(byLastName),
   };
   await page.route('**/api/v1/equipping/final-grades?*', (route) =>
     route.fulfill(
@@ -900,7 +912,7 @@ export async function mockGradeChange(page: Page): Promise<{ sent: { url: string
     }));
   const student = (n: number, name: string, grade: string, reason: string, signs: string[], extra = {}) => ({
     enrollment_id: id(7100 + n),
-    person: { id: id(8100 + n), full_name: name },
+    person: { id: id(8100 + n), full_name: name, list_name: lastNameFirst(name) },
     grade,
     reason,
     lessons_kept: signs.filter((s) => s !== 'ABSENT').length + 1,
@@ -958,7 +970,8 @@ export async function mockGradeChange(page: Page): Promise<{ sent: { url: string
       }),
       student(2, 'Imelda Tolentino', 'NOT_PASSED', 'L7 not made up.', [C, C, C, C, C, 'ABSENT', C, C]),
       student(5, 'Tomas Aquino', 'PASSED', 'Every lesson done.', [C, C, C, C, C, C, C, C]),
-    ],
+      // In last-name order, as the API sends a school list (decision 0515).
+    ].sort(byLastName),
   };
   await page.route(`**/api/v1/equipping/final-grades/classes/${CLASS_ID}`, (route) => route.fulfill(json(grades)));
   await page.route('**/api/v1/equipping/final-grades/grades/*/change-preview?*', (route) => {

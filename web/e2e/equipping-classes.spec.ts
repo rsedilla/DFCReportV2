@@ -88,11 +88,11 @@ test('Students shows each Cell leader and Guide, says No Guide yet, and swaps a 
   await openClasses(page);
   await page.getByRole('row', { name: /Life Class A/ }).getByRole('button', { name: 'Students' }).click();
   const dialog = page.getByRole('dialog', { name: 'Life Class A · students' });
-  await expect(dialog.getByRole('listitem').filter({ hasText: 'Efren Quiambao' })).toContainText(
+  await expect(dialog.getByRole('listitem').filter({ hasText: 'Quiambao, Efren' })).toContainText(
     'Cell leader: Gilbert Manalo · Guide: Benjie Lacson',
   );
   // Nobody of her sex guides yet, so there is nobody to swap to.
-  const imelda = dialog.getByRole('listitem').filter({ hasText: 'Imelda Tolentino' });
+  const imelda = dialog.getByRole('listitem').filter({ hasText: 'Tolentino, Imelda' });
   await expect(imelda).toContainText('Cell leader: none · Guide: No Guide yet');
   await expect(imelda.getByRole('combobox')).toHaveCount(0);
 

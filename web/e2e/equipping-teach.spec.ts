@@ -183,7 +183,7 @@ test('a make-up is recorded from Make-ups still owed, and the register says M', 
   const owed = page.getByRole('region', { name: /Make-ups still owed/ });
   await expect(owed.getByRole('heading')).toHaveText('Make-ups still owed · 1');
   await expect(owed.getByRole('listitem')).toHaveCount(1);
-  await expect(owed.getByRole('listitem')).toContainText('Efren Quiambao · L2');
+  await expect(owed.getByRole('listitem')).toContainText('Quiambao, Efren · L2');
   await expect(owed.getByRole('listitem')).toContainText('Cell leader Gilbert Manalo');
 
   await owed.getByRole('button', { name: 'Record make-up' }).click();
@@ -196,10 +196,10 @@ test('a make-up is recorded from Make-ups still owed, and the register says M', 
 
   // Imelda made lesson 2 up: M, said in words for a screen reader, and 2 of 2 kept.
   const register = page.getByRole('table', { name: 'Attendance so far, lesson by lesson' });
-  const imelda = register.getByRole('row', { name: /Imelda Tolentino/ });
+  const imelda = register.getByRole('row', { name: /Tolentino, Imelda/ });
   await expect(imelda).toContainText('made up');
   await expect(imelda).toContainText('2 of 2');
-  await expect(register.getByRole('row', { name: /Efren Quiambao/ })).toContainText('1 of 2');
+  await expect(register.getByRole('row', { name: /Quiambao, Efren/ })).toContainText('1 of 2');
 });
 
 test('a Guide reads the class and records nothing', async ({ page }) => {
@@ -215,9 +215,9 @@ test('a Guide is told who missed the last two lessons, and a make-up takes them 
   const box = page.getByRole('region', { name: /Missed the last two lessons/ });
   await expect(box.getByRole('heading', { level: 2 })).toHaveText('Missed the last two lessons · 1');
   await expect(box.getByRole('listitem')).toHaveCount(1);
-  await expect(box.getByRole('listitem')).toHaveText('Efren Quiambao · L2 and L3 · Cell leader Gilbert Manalo');
+  await expect(box.getByRole('listitem')).toHaveText('Quiambao, Efren · L2 and L3 · Cell leader Gilbert Manalo');
   // Imelda made lesson 2 up, and Rosa joined after lessons 1 and 2: neither is named.
-  await expect(box).not.toContainText('Imelda Tolentino');
+  await expect(box).not.toContainText('Tolentino, Imelda');
   await expect(box).not.toContainText('Rosa Villanueva');
 });
 
@@ -261,14 +261,14 @@ test('a Teacher reads a closed week and is told only the Admin corrects it', asy
 test('a student who joined later reads ○, is owed the lessons, and is not ticked for them', async ({ page }) => {
   const { sent } = await openClass(page, { joiners: true });
   const register = page.getByRole('table', { name: 'Attendance so far, lesson by lesson' });
-  const rosa = register.getByRole('row', { name: /Rosa Villanueva/ });
+  const rosa = register.getByRole('row', { name: /Villanueva, Rosa/ });
   await expect(rosa).toContainText('before they joined');
   await expect(rosa).toContainText('Joined');
   // Neither lesson counts against her until it is made up.
   await expect(rosa).toContainText('0 of 0');
 
   const owed = page.getByRole('region', { name: /Make-ups still owed/ });
-  const rosaOwed = owed.getByRole('listitem').filter({ hasText: 'Rosa Villanueva' });
+  const rosaOwed = owed.getByRole('listitem').filter({ hasText: 'Villanueva, Rosa' });
   await expect(rosaOwed).toHaveCount(2);
   await expect(rosaOwed.first()).toContainText('held before they joined');
   await expect(rosaOwed.first()).toContainText('not counted as an absence');
@@ -285,7 +285,7 @@ test('a student who joined later reads ○, is owed the lessons, and is not tick
 test('a moved student keeps the ticks of the class they came from', async ({ page }) => {
   await openClass(page, { joiners: true });
   const register = page.getByRole('table', { name: 'Attendance so far, lesson by lesson' });
-  const tomas = register.getByRole('row', { name: /Tomas Aquino/ });
+  const tomas = register.getByRole('row', { name: /Aquino, Tomas/ });
   await expect(tomas).toContainText('Moved from Life Class B · L1, L2, L3 there');
   await expect(tomas).toContainText('3 of 3');
   // Lesson 3, still to record here, was marked in Life Class B: he is named apart, not ticked.

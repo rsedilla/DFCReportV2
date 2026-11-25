@@ -45,6 +45,7 @@ import type {
   OpenClassDto,
   RegisterDto,
 } from './dto/equipping.dto';
+import { bySchoolName, schoolPerson } from './school-order';
 
 /** Section 12's and section 9's ladder: the fifth attendance and beyond is a Regular. */
 const REGULAR_FROM = 5;
@@ -75,17 +76,31 @@ export function ageOn(birthDate: string, day: string): number {
   return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
 }
 
-function encodeCursor(row: { registered_at: Date; id: string }): string {
-  return Buffer.from(JSON.stringify([row.registered_at.toISOString(), row.id])).toString(
-    'base64url',
-  );
+/** The *Registration* list's key: last name, first name, Member ID, then the row (decision 0515). */
+interface RegistrationCursor {
+  last: string;
+  first: string;
+  member: string;
+  id: string;
 }
 
-/** Exactly what `toISOString` writes, so a forged key cannot carry text to the query. */
-const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+function encodeCursor(row: {
+  last_name: string;
+  first_name: string;
+  member_id: string;
+  id: string;
+}): string {
+  return Buffer.from(
+    JSON.stringify([row.last_name, row.first_name, row.member_id, row.id]),
+  ).toString('base64url');
+}
+
+/** A name part as a cursor carries it, bounded as a name is (section 3). */
+const isNamePart = (value: unknown): value is string =>
+  typeof value === 'string' && value.length <= 200;
 
 /** A cursor that cannot be resolved is refused (decision 0159). */
-function decodeCursor(cursor: string | undefined): { at: string; id: string } | null {
+function decodeCursor(cursor: string | undefined): RegistrationCursor | null {
   if (cursor === undefined) {
     return null;
   }
@@ -93,14 +108,14 @@ function decodeCursor(cursor: string | undefined): { at: string; id: string } | 
     const value: unknown = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
     if (
       Array.isArray(value) &&
-      value.length === 2 &&
-      typeof value[0] === 'string' &&
-      ISO_INSTANT.test(value[0]) &&
-      !Number.isNaN(Date.parse(value[0])) &&
-      typeof value[1] === 'string' &&
-      isUuid(value[1])
+      value.length === 4 &&
+      isNamePart(value[0]) &&
+      isNamePart(value[1]) &&
+      isNamePart(value[2]) &&
+      typeof value[3] === 'string' &&
+      isUuid(value[3])
     ) {
-      return { at: value[0], id: value[1] };
+      return { last: value[0], first: value[1], member: value[2], id: value[3] };
     }
   } catch {
     // Falls through to the refusal.
@@ -556,7 +571,11 @@ export class EquippingService {
     ) as Record<EquippingLevel, number>;
   }
 
-  /** A term's registrations, newest first, a page at a time (section 22). */
+  /**
+   * A term's registrations in last-name order, a page at a time (sections 22 and 29, decision
+   * 0515): `persons` is joined onto this module's own table for the key, the one shape section 2
+   * admits, so the database pages by it rather than this list being read whole.
+   */
   async registrations(query: ListRegistrationsDto): Promise<Record<string, unknown>> {
     const limit = query.limit ?? DEFAULT_PAGE;
     const after = decodeCursor(query.cursor);
@@ -567,9 +586,13 @@ export class EquippingService {
         join.onRef('e.registration_id', '=', 'r.id').on('e.ended_at', 'is', null),
       )
       .leftJoin('equipping_classes as c', 'c.id', 'e.class_id')
+      .innerJoin('persons as p', 'p.id', 'r.person_id')
       .select([
         'r.id',
         'r.person_id',
+        'p.last_name',
+        'p.first_name',
+        'p.member_id',
         'r.unmet',
         'r.exception_reason',
         'r.note',
@@ -586,14 +609,21 @@ export class EquippingService {
       .$if(after !== null, (qb) =>
         qb.where((eb) =>
           eb(
-            eb.refTuple('r.registered_at', 'r.id'),
-            '<',
-            eb.tuple(sql<Date>`${after!.at}::timestamptz`, sql<string>`${after!.id}::uuid`),
+            eb.refTuple('p.last_name', 'p.first_name', 'p.member_id', 'r.id'),
+            '>',
+            eb.tuple(
+              sql<string>`${after!.last}`,
+              sql<string>`${after!.first}`,
+              sql<string>`${after!.member}`,
+              sql<string>`${after!.id}::uuid`,
+            ),
           ),
         ),
       )
-      .orderBy('r.registered_at', 'desc')
-      .orderBy('r.id', 'desc')
+      .orderBy('p.last_name')
+      .orderBy('p.first_name')
+      .orderBy('p.member_id')
+      .orderBy('r.id')
       .limit(limit + 1)
       .execute();
 
@@ -610,9 +640,8 @@ export class EquippingService {
       data: page.map((row) => ({
         id: row.id,
         person: {
-          id: row.person_id,
+          ...schoolPerson(row.person_id, people),
           member_id: people.get(row.person_id)?.memberId ?? null,
-          full_name: people.get(row.person_id)?.fullName ?? null,
         },
         leader_name: leaderNames.get(row.person_id) ?? null,
         birthday_recorded: (births.get(row.person_id) ?? null) !== null,
@@ -782,13 +811,16 @@ export class EquippingService {
     return {
       class: { id: cls.id, name: cls.name },
       // The class's Guides, for *Swap Guide*, each with the sex of the students they follow up.
-      guides: guides.map((g) => ({
-        id: g.id,
-        person: { id: g.person_id, full_name: nameOf(g.person_id) },
-        sex: g.sex,
-        // Archived since being named: keeps their students, takes no new ones (decision 0502).
-        archived: g.archived,
-      })),
+      guides: guides
+        .map((g) => ({
+          id: g.id,
+          person: { id: g.person_id, full_name: nameOf(g.person_id) },
+          sex: g.sex,
+          // Archived since being named: keeps their students, takes no new ones (decision 0502).
+          archived: g.archived,
+        }))
+        // Last-name order, as every school list (decision 0515).
+        .sort(bySchoolName(people)),
       data: ids
         .map((id) => {
           const enrollmentId = enrollmentOf.get(canonicalId(id))!;
@@ -796,14 +828,14 @@ export class EquippingService {
           const leaderId = cells.get(id)?.membership?.leaderId ?? null;
           return {
             enrollment_id: enrollmentId,
-            person: { id, full_name: nameOf(id) },
+            person: schoolPerson(id, people),
             sex: sexes.get(canonicalId(id)) ?? null,
             // Shown to the Coordinator for every student, whatever branch (owner, 2026-11-20).
             cell_leader: leaderId === null ? null : { id: leaderId, full_name: nameOf(leaderId) },
             guide: guide ? { id: guide.id, full_name: nameOf(guide.person_id) } : null,
           };
         })
-        .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '')),
+        .sort(bySchoolName(people)),
     };
   }
 
@@ -977,30 +1009,33 @@ export class EquippingService {
         .map((row) => ({
           enrollment_id: row.enrollment_id,
           registration_id: row.registration_id,
-          person: { id: row.person_id, full_name: nameOf(row.person_id) },
+          person: schoolPerson(row.person_id, people),
         }))
-        .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '')),
-      ready: ready.map((row) => {
-        const check = eligibility.byPerson.get(canonicalId(row.person_id))!;
-        return {
-          registration_id: row.id,
-          person: { id: row.person_id, full_name: nameOf(row.person_id) },
-          leader_name: leaderNames.get(row.person_id) ?? null,
-          with_exception: row.unmet.length > 0,
-          birthday_recorded: check.birthDate !== null,
-          age_at_encounter: check.age,
-          blocked: check.blocked,
-          try_number: 1 + triesBefore(tries.get(canonicalId(row.person_id)), cls),
-          joins_at_lesson_6: ((source) =>
-            source === undefined
-              ? null
-              : {
-                  class_name: source.className,
-                  term_year: source.termYear,
-                  term_number: source.termNumber,
-                })(joining.get(canonicalId(row.person_id))),
-        };
-      }),
+        // Last-name order, as every school list (decision 0515).
+        .sort(bySchoolName(people)),
+      ready: ready
+        .map((row) => {
+          const check = eligibility.byPerson.get(canonicalId(row.person_id))!;
+          return {
+            registration_id: row.id,
+            person: schoolPerson(row.person_id, people),
+            leader_name: leaderNames.get(row.person_id) ?? null,
+            with_exception: row.unmet.length > 0,
+            birthday_recorded: check.birthDate !== null,
+            age_at_encounter: check.age,
+            blocked: check.blocked,
+            try_number: 1 + triesBefore(tries.get(canonicalId(row.person_id)), cls),
+            joins_at_lesson_6: ((source) =>
+              source === undefined
+                ? null
+                : {
+                    class_name: source.className,
+                    term_year: source.termYear,
+                    term_number: source.termNumber,
+                  })(joining.get(canonicalId(row.person_id))),
+          };
+        })
+        .sort(bySchoolName(people)),
     };
   }
 

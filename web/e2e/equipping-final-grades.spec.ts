@@ -19,7 +19,7 @@ async function registrar(page: Page, phase: Parameters<typeof mockFinalGrades>[1
   return mocked;
 }
 
-test('each class says where it stands, and the grades lead with what needs a look', async ({ page }) => {
+test('each class says where it stands, and the grades run from A to Z by last name', async ({ page }) => {
   await registrar(page);
   const classes = page.getByRole('group', { name: 'Classes' });
   await expect(classes.getByRole('button', { name: /Life Class A\s*Ready to post/ })).toBeVisible();
@@ -28,9 +28,11 @@ test('each class says where it stands, and the grades lead with what needs a loo
 
   const table = page.getByRole('table', { name: 'Final grades, Life Class A' });
   const names = await table.getByRole('rowheader').allTextContents();
-  expect(names.map((n) => n.split(' ')[0])).toEqual(['Imelda', 'Ramil', 'Nestor', 'Efren', 'Tomas']);
-  await expect(table.getByRole('row', { name: /Nestor Villamor/ })).toContainText('Not yet');
-  await expect(table.getByRole('row', { name: /Ramil Soriano/ })).toContainText('Joins a later class at lesson 6.');
+  // Straight from A to Z by last name, each name last name first (decision 0515).
+  expect(names.map((n) => n.split(',')[0])).toEqual(['Aquino', 'Quiambao', 'Soriano', 'Tolentino', 'Villamor']);
+  expect(names[0]).toBe('Aquino, Tomas');
+  await expect(table.getByRole('row', { name: /Villamor, Nestor/ })).toContainText('Not yet');
+  await expect(table.getByRole('row', { name: /Soriano, Ramil/ })).toContainText('Joins a later class at lesson 6.');
 
   await page.getByRole('button', { name: 'Not yet · 1' }).click();
   await expect(table.getByRole('rowheader')).toHaveCount(1);
@@ -60,7 +62,7 @@ test('the Coordinator reads the grades, sees their disciple marked, and checks',
   const { sent } = await mockFinalGrades(page, 'WAITING_COORDINATOR');
   await page.goto(`/equipping/classes/${ATTENDANCE_IDS.classId}/grades`);
   const table = page.getByRole('table', { name: 'Final grades, Life Class A' });
-  await expect(table.getByRole('row', { name: /Ramil Soriano/ })).toContainText('Your disciple: the Admin checks');
+  await expect(table.getByRole('row', { name: /Soriano, Ramil/ })).toContainText('Your disciple: the Admin checks');
   await page.getByRole('button', { name: 'Mark as checked' }).click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0].url).toMatch(/\/coordinate\/classes\/.*\/check$/);

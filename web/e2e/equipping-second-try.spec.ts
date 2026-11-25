@@ -19,15 +19,15 @@ async function open(page: Page, path: string, width = 1280, tries = true) {
 
 test('Registration says 2nd try beside the name, and nothing for a first try', async ({ page }) => {
   await open(page, '/equipping/registration');
-  await expect(page.getByRole('row', { name: /Carlito Manalo/ })).toContainText('Carlito Manalo · 2nd try');
-  await expect(page.getByRole('row', { name: /Danica Flores/ })).not.toContainText('try');
+  await expect(page.getByRole('row', { name: /Manalo, Carlito/ })).toContainText('Manalo, Carlito · 2nd try');
+  await expect(page.getByRole('row', { name: /Flores, Danica/ })).not.toContainText('try');
 });
 
 test('Ready to enroll says 2nd try, on a laptop and on a phone', async ({ page }) => {
   await open(page, '/equipping/enrollment');
-  await expect(page.getByRole('row', { name: /Ernesto Lim/ })).toContainText('Ernesto Lim · 2nd try');
+  await expect(page.getByRole('row', { name: /Lim, Ernesto/ })).toContainText('Lim, Ernesto · 2nd try');
   await page.setViewportSize({ width: 375, height: 812 });
-  await expect(page.getByRole('listitem').filter({ hasText: 'Ernesto Lim' }).first()).toContainText('2nd try');
+  await expect(page.getByRole('listitem').filter({ hasText: 'Lim, Ernesto' }).first()).toContainText('2nd try');
 });
 
 for (const [tries, shown] of [

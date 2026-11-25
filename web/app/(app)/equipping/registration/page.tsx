@@ -31,6 +31,7 @@ import {
   type FoundPerson,
   type Registration,
   type Term,
+  listName,
 } from '@/lib/equipping';
 import { describeFailure } from '@/lib/messages';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
@@ -126,7 +127,7 @@ function RegistrationList({ term }: { term: Term }) {
           {list.data.data.map((row) => (
             <tr key={row.id} className={rowClasses}>
               <td className="px-3 py-3 align-top">
-                {row.person.full_name}
+                {listName(row.person)}
                 {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
                 <span className="text-muted block text-sm sm:hidden">
                   {row.leader_name ?? 'No leader yet'} ·{' '}
