@@ -597,7 +597,6 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
   });
 
   it('still admits a make-up in a posted class for somebody nobody carries from', async () => {
-    // A moved student's make-up of a lesson missed in a class since posted is not 0512's rule.
     const kept = await keptInB(pablo, false);
     const lesson3 = (
       await db
@@ -608,21 +607,34 @@ describe('Joining a later class at Lesson 6 (section 29, decision 0512)', () => 
         .where('l.lesson', '=', 3)
         .executeTakeFirstOrThrow()
     ).id;
-    await db
-      .updateTable('equipping_make_ups')
-      .set({ superseded_at: new Date(), superseded_by: admin.id })
-      .where('lesson_id', '=', lesson3)
-      .execute();
+    // Only 0512's rule is under test here. The student was graded by B's posting, so decision
+    // 0513 admits this write only beside a grade change; that rule is set aside for this one
+    // transaction. A student the posting did not grade is admitted without it, which
+    // `equipping-grade-change.e2e.spec.ts` pins.
     await expect(
-      db
-        .insertInto('equipping_make_ups')
-        .values({
-          lesson_id: lesson3,
-          enrollment_id: kept,
-          made_up_on: '2027-02-02',
-          recorded_by: admin.id,
-        })
-        .execute(),
+      db.transaction().execute(async (trx) => {
+        await sql`ALTER TABLE equipping_make_ups DISABLE TRIGGER equipping_make_ups_posted_kept`.execute(
+          trx,
+        );
+        await trx
+          .updateTable('equipping_make_ups')
+          .set({ superseded_at: new Date(), superseded_by: admin.id })
+          .where('lesson_id', '=', lesson3)
+          .execute();
+        const written = await trx
+          .insertInto('equipping_make_ups')
+          .values({
+            lesson_id: lesson3,
+            enrollment_id: kept,
+            made_up_on: '2027-02-02',
+            recorded_by: admin.id,
+          })
+          .execute();
+        await sql`ALTER TABLE equipping_make_ups ENABLE TRIGGER equipping_make_ups_posted_kept`.execute(
+          trx,
+        );
+        return written;
+      }),
     ).resolves.toBeDefined();
   });
 });
