@@ -433,6 +433,11 @@ export type AuditAction =
   | 'equipping_lesson.recorded'
   | 'equipping_lesson.corrected'
   | 'equipping_make_up.recorded'
+  | 'equipping_items.brought'
+  | 'equipping_items.unticked'
+  | 'equipping_quiz.set'
+  | 'equipping_quiz.try_recorded'
+  | 'equipping_book.recorded'
   | 'equipping_enrollment.created'
   | 'equipping_enrollment.ended'
   | 'equipping_enrollment.reopened'
@@ -1073,6 +1078,9 @@ export interface EquippingMarksTable {
   superseded_at: Date | null;
   superseded_by: string | null;
   correction_reason: string | null;
+  /** SOL's memory verse and devotional, for a student who came; null otherwise (decision 0514). */
+  verse: boolean | null;
+  devotional: boolean | null;
 }
 
 /** A make-up of a missed lesson, recorded as M with its date (decision 0501, point 12). */
@@ -1081,6 +1089,53 @@ export interface EquippingMakeUpsTable {
   lesson_id: string;
   enrollment_id: string;
   made_up_on: DateOnly;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+  /** SOL's memory verse and devotional, ticked at the make-up; null on Life Class's (0514). */
+  verse: boolean | null;
+  devotional: boolean | null;
+}
+
+/** A SOL verse or devotional brought after its lesson (decision 0514, point 10). */
+export interface EquippingItemsBroughtTable {
+  id: Generated<string>;
+  lesson_id: string;
+  enrollment_id: string;
+  item: 'VERSE' | 'DEVOTIONAL';
+  brought_on: DateOnly;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+}
+
+/** A SOL class's quiz: its number of items (decision 0501, point 18). */
+export interface EquippingQuizzesTable {
+  class_id: string;
+  items: number;
+  set_by: string;
+  set_at: ServerTimestamp;
+}
+
+/** One try's score, every score kept (decision 0501, point 18; owner, 2026-11-26). */
+export interface EquippingQuizTriesTable {
+  id: Generated<string>;
+  enrollment_id: string;
+  try: number;
+  score: number;
+  recorded_by: string;
+  recorded_at: ServerTimestamp;
+  superseded_at: Date | null;
+  superseded_by: string | null;
+}
+
+/** Whether a SOL student read the book (decision 0501, point 18; owner, 2026-11-26). */
+export interface EquippingBooksTable {
+  id: Generated<string>;
+  enrollment_id: string;
+  read: boolean;
   recorded_by: string;
   recorded_at: ServerTimestamp;
   superseded_at: Date | null;
@@ -1328,6 +1383,10 @@ export interface Database {
   equipping_lessons: EquippingLessonsTable;
   equipping_marks: EquippingMarksTable;
   equipping_make_ups: EquippingMakeUpsTable;
+  equipping_items_brought: EquippingItemsBroughtTable;
+  equipping_quizzes: EquippingQuizzesTable;
+  equipping_quiz_tries: EquippingQuizTriesTable;
+  equipping_books: EquippingBooksTable;
   equipping_encounter_enrollments: EquippingEncounterEnrollmentsTable;
   equipping_encounter_attendance: EquippingEncounterAttendanceTable;
   equipping_class_checks: EquippingClassChecksTable;

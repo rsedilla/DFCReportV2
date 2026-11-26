@@ -604,33 +604,14 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
     });
   });
 
-  describe('SOL 1’s register and grades, not built yet (decision 0514)', () => {
-    it('refuses a lesson, a make-up and a posting on a SOL 1 class, and writes nothing', async () => {
-      const { classId, enrollmentId } = await solClassWithStudent();
-      expect(
-        errorCode(
-          await post(admin, `equipping/classes/${classId}/lessons/1`, {
-            held_on: '2027-01-13',
-            came: [],
-          }).expect(409),
-        ),
-      ).toBe('INVARIANT_VIOLATION');
-      expect(
-        errorCode(
-          await post(admin, `equipping/classes/${classId}/make-ups`, {
-            enrollment_id: enrollmentId,
-            lesson: 1,
-            made_up_on: '2027-01-14',
-          }).expect(409),
-        ),
-      ).toBe('INVARIANT_VIOLATION');
+  describe('SOL 1’s grades, not built yet (decision 0514)', () => {
+    it('refuses posting a SOL 1 class, and files no SOL 1 graduation', async () => {
+      const { classId } = await solClassWithStudent();
       expect(
         errorCode(
           await post(registrar, `equipping/final-grades/classes/${classId}/post`, {}).expect(409),
         ),
       ).toBe('INVARIANT_VIOLATION');
-      expect(await db.selectFrom('equipping_lessons').select('id').execute()).toEqual([]);
-      expect(await db.selectFrom('equipping_make_ups').select('id').execute()).toEqual([]);
       expect(await db.selectFrom('equipping_class_postings').select('id').execute()).toEqual([]);
       expect(
         await db
@@ -642,12 +623,13 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       ).toEqual([]);
     });
 
-    it('leaves a SOL 1 class out of a Guide’s classes and a leader’s people', async () => {
+    it('lists a SOL 1 class among a Guide’s classes, and leaves it out of a leader’s people', async () => {
       const { classId } = await solClassWithStudent();
       const gilAccount = await createAccount(app, db, { person: gil, roles: ['LEADER'] });
       const mine = await get(gilAccount, 'equipping/my-classes').expect(200);
-      expect((mine.body as { data: { id: string }[] }).data.map((each) => each.id)).not.toContain(
-        classId,
+      // Its register is built (decision 0514, points 8 to 10); a leader's SOL 1 card is step 4.
+      expect((mine.body as { data: { id: string; level: string }[] }).data).toContainEqual(
+        expect.objectContaining({ id: classId, level: 'SOL_1' }),
       );
       const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
       const people = await get(ramonAccount, 'equipping/my-people').expect(200);
@@ -665,11 +647,14 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       expect(counts.body).toEqual({ LIFE_CLASS: 0, SOL_1: 1 });
     });
 
-    it('keeps a SOL 1 class out of the register, the grades and the Teacher’s list', async () => {
+    it('opens a SOL 1 class’s register, and keeps it out of the grades', async () => {
       const { classId } = await solClassWithStudent();
+      const register = await get(solCoordinator, `equipping/classes/${classId}/attendance`).expect(
+        200,
+      );
       expect(
-        errorCode(await get(solCoordinator, `equipping/classes/${classId}/attendance`).expect(409)),
-      ).toBe('INVARIANT_VIOLATION');
+        (register.body as { lessons: { lesson: number }[] }).lessons.map((l) => l.lesson),
+      ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
       expect(
         errorCode(await get(registrar, `equipping/final-grades/classes/${classId}`).expect(409)),
       ).toBe('INVARIANT_VIOLATION');

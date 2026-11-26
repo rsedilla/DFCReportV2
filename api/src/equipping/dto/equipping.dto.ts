@@ -273,6 +273,22 @@ export class SaveLessonDto {
   @IsUUID('all', { each: true })
   came!: string[];
 
+  /** SOL: who recited the memory verse, among those who came (decision 0514, point 8). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  verse?: string[];
+
+  /** SOL: who handed in the devotional, among those who came (decision 0514, point 8). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @ArrayUnique()
+  @IsUUID('all', { each: true })
+  devotional?: string[];
+
   /** The lesson's version when the page read it; required once the lesson has been saved. */
   @IsOptional()
   @IsInt()
@@ -296,11 +312,89 @@ export class RecordMakeUpDto {
 
   @IsInt()
   @Min(1)
-  @Max(9)
+  @Max(10)
   lesson!: number;
 
   @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })
   made_up_on!: string;
+
+  /** SOL: the memory verse recited at the make-up (decision 0514, point 9); refused for Life Class. */
+  @IsOptional()
+  @IsBoolean()
+  verse?: boolean;
+
+  /** SOL: the devotional handed in at the make-up (decision 0514, point 9); refused for Life Class. */
+  @IsOptional()
+  @IsBoolean()
+  devotional?: boolean;
+}
+
+/** A SOL verse or devotional brought after its lesson (decision 0514, point 10). */
+export class RecordItemsBroughtDto {
+  @IsUUID()
+  enrollment_id!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  lesson!: number;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(2)
+  @ArrayUnique()
+  @IsIn(['VERSE', 'DEVOTIONAL'], { each: true })
+  items!: ('VERSE' | 'DEVOTIONAL')[];
+
+  @IsManilaCalendarDate({ message: 'brought_on must be a real calendar date, YYYY-MM-DD' })
+  brought_on!: string;
+}
+
+/** A late verse or devotional ticked by mistake, unticked (owner, 2026-11-26). */
+export class UntickItemBroughtDto {
+  @IsUUID()
+  enrollment_id!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  lesson!: number;
+
+  @IsIn(['VERSE', 'DEVOTIONAL'])
+  item!: 'VERSE' | 'DEVOTIONAL';
+}
+
+/** A SOL class's quiz: its number of items (decision 0501, point 18). */
+export class SetQuizDto {
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  items!: number;
+}
+
+/** One try's score (decision 0501, point 18; owner, 2026-11-26). */
+export class RecordQuizTryDto {
+  @IsUUID()
+  enrollment_id!: string;
+
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  try!: number;
+
+  @IsInt()
+  @Min(0)
+  @Max(500)
+  score!: number;
+}
+
+/** Whether a SOL student read the book (decision 0501, point 18; owner, 2026-11-26). */
+export class RecordBookDto {
+  @IsUUID()
+  enrollment_id!: string;
+
+  @IsBoolean()
+  read!: boolean;
 }
 
 /** What a change after posting sets a lesson to (decision 0513). */

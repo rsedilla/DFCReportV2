@@ -93,7 +93,7 @@ export default function ClassesPage() {
     enabled: levels.isSuccess,
   });
   const others = classes.data?.other_coordinators ?? [];
-  // SOL 1's register and grades come with later steps (decision 0514).
+  // SOL 1's grades come with a later step (decision 0514); its register is built.
   const life = level === 'LIFE_CLASS';
   const lead =
     others.length > 0
@@ -181,7 +181,7 @@ export default function ClassesPage() {
                     </p>
                     <p className="text-sm">
                       <span className="text-muted">Attendance </span>
-                      {life ? <AttendanceLine each={each} /> : <span className="text-muted">Not recorded here yet</span>}
+                      <AttendanceLine each={each} />
                     </p>
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
@@ -228,7 +228,7 @@ export default function ClassesPage() {
                     </td>
                     <td className="px-3 py-3">{each.enrolled}</td>
                     <td className="px-3 py-3">
-                      {life ? <AttendanceLine each={each} /> : <span className="text-muted">Not recorded here yet</span>}
+                      <AttendanceLine each={each} />
                     </td>
                     <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
                     <td className="px-3 py-1">

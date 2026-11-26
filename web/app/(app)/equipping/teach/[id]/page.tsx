@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
 import { longDay } from '@/components/growth-controls';
+import { OwedItemsCard, QuizAndBook, SolRecord, TickAll } from '@/components/sol-register';
 import { TeachFrame } from '@/components/teach-frame';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
@@ -92,14 +93,20 @@ const ROLE_WORDS: Record<ClassAttendance['role'], string> = {
 };
 
 function ClassBody({ data }: { data: ClassAttendance }) {
-  const [chosen, setChosen] = useState(() => firstOpen(data.lessons));
+  // SOL's ten lessons and its quiz and book (decision 0514, point 8); Life Class's nine with the
+  // Encounter, the Registrar's, as lesson 5.
+  const sol = data.class.level === 'SOL_1';
+  const [chosen, setChosen] = useState<number | 'QUIZ'>(() => firstOpen(data.lessons));
   const lesson = data.lessons.find((l) => l.lesson === chosen) ?? data.lessons[0];
+  const columns = sol ? data.lessons.map((l) => l.lesson) : COLUMNS;
+  const quizDone =
+    data.students.length > 0 && data.students.every((s) => s.quiz?.passed === true && s.book_read === true);
   return (
     <div className="flex flex-col gap-6">
       {data.role === 'GUIDE' ? <MissedTwice data={data} /> : null}
       <div className="flex flex-wrap gap-2" role="group" aria-label="Choose a lesson">
-        {COLUMNS.map((n) => {
-          if (n === 5) {
+        {columns.map((n) => {
+          if (n === 5 && !sol) {
             return (
               <span key={n} className="border-line text-muted flex min-h-11 flex-col rounded-lg border px-3 py-1 text-sm">
                 <span className="font-semibold">ENC</span>
@@ -120,17 +127,33 @@ function ClassBody({ data }: { data: ClassAttendance }) {
                 n === chosen ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-raised',
               )}
             >
-              <span className="font-semibold">{lessonLabel(n)}</span>
+              <span className="font-semibold">{sol ? `L${n}` : lessonLabel(n)}</span>
               <span className={cn('text-xs', warn ? 'text-field-invalid font-semibold' : 'text-muted')}>
                 {STATE_WORDS[each.state]}
               </span>
             </button>
           );
         })}
+        {sol ? (
+          <button
+            type="button"
+            aria-pressed={chosen === 'QUIZ'}
+            onClick={() => setChosen('QUIZ')}
+            className={cn(
+              'flex min-h-11 flex-col items-start rounded-lg border px-3 py-1 text-left text-sm',
+              chosen === 'QUIZ' ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:bg-raised',
+            )}
+          >
+            <span className="font-semibold">Quiz and book</span>
+            <span className="text-muted text-xs">{quizDone ? 'Done' : 'Not yet'}</span>
+          </button>
+        ) : null}
       </div>
 
       <section aria-labelledby="lesson-heading" className="border-line bg-surface rounded-xl border p-4">
-        {data.may_record && (lesson.open || data.may_correct_closed) ? (
+        {chosen === 'QUIZ' ? (
+          <QuizAndBook data={data} />
+        ) : data.may_record && (lesson.open || data.may_correct_closed) ? (
           <LessonForm key={`${lesson.lesson}:${lesson.version ?? 0}`} data={data} lesson={lesson} />
         ) : (
           <LessonRead data={data} lesson={lesson} />
@@ -138,7 +161,8 @@ function ClassBody({ data }: { data: ClassAttendance }) {
       </section>
 
       <Owed data={data} />
-      <Register data={data} />
+      {sol ? <OwedItemsCard data={data} /> : null}
+      {sol ? <SolRecord data={data} /> : <Register data={data} />}
     </div>
   );
 }
@@ -240,14 +264,29 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
   const [came, setCame] = useState<Set<string>>(
     () => new Set(data.students.filter((s) => markHere(s, lesson.lesson)?.came).map((s) => s.enrollment_id)),
   );
+  // SOL ticks the memory verse and devotional of whoever came (decision 0514, point 8).
+  const sol = data.class.level === 'SOL_1';
+  const [verse, setVerse] = useState<Set<string>>(
+    () => new Set(data.students.filter((s) => markHere(s, lesson.lesson)?.verse).map((s) => s.enrollment_id)),
+  );
+  const [devotional, setDevotional] = useState<Set<string>>(
+    () => new Set(data.students.filter((s) => markHere(s, lesson.lesson)?.devotional).map((s) => s.enrollment_id)),
+  );
   const [reason, setReason] = useState('');
   const [writeKey, renewWriteKey] = useWriteKey();
   const closed = !lesson.open;
   const save = useMutation({
     mutationFn: () => {
+      const cameIds = [...came].filter((id) => ticking.some((s) => s.enrollment_id === id));
       const body = {
         held_on: heldOn,
-        came: [...came].filter((id) => ticking.some((s) => s.enrollment_id === id)),
+        came: cameIds,
+        ...(sol
+          ? {
+              verse: [...verse].filter((id) => cameIds.includes(id)),
+              devotional: [...devotional].filter((id) => cameIds.includes(id)),
+            }
+          : {}),
         ...(lesson.version !== null ? { version: lesson.version } : {}),
         ...(closed ? { correction_reason: reason.trim() } : {}),
       };
@@ -273,8 +312,11 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
   const ticking = data.students.filter((s) => !keeping.includes(s) && !later.includes(s) && !elsewhere.includes(s));
   const absent = ticking.filter((s) => !came.has(s.enrollment_id));
   const cameCount = ticking.length - absent.length;
-  const toggle = (enrollmentId: string, on: boolean) =>
-    setCame((was) => {
+  const cameIds = ticking.filter((s) => came.has(s.enrollment_id)).map((s) => s.enrollment_id);
+  const verseCount = cameIds.filter((id) => verse.has(id)).length;
+  const devotionalCount = cameIds.filter((id) => devotional.has(id)).length;
+  const flip = (set: (update: (was: Set<string>) => Set<string>) => void, enrollmentId: string, on: boolean) =>
+    set((was) => {
       const next = new Set(was);
       if (on) {
         next.add(enrollmentId);
@@ -283,6 +325,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
       }
       return next;
     });
+  const toggle = (enrollmentId: string, on: boolean) => flip(setCame, enrollmentId, on);
   const canSave = !save.isPending && heldOn !== '' && (!closed || reason.trim() !== '');
 
   return (
@@ -301,7 +344,9 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
             {lesson.state === 'SAVED' ? ' · Saved' : ''}
           </h2>
           <p className="text-muted text-sm">
-            Tick who came. Anyone not ticked is saved Absent.
+            {sol
+              ? 'Tick who came, who recited the memory verse, and who handed in the devotional. Anyone not ticked as came is saved Absent; their verse and devotional are ticked when they make the lesson up.'
+              : 'Tick who came. Anyone not ticked is saved Absent.'}
             {lesson.state === 'SAVED' && lesson.open
               ? ` You may change it until ${new Date(lesson.closes_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long' })}.`
               : ''}
@@ -327,15 +372,40 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
           <ul className="mt-4 flex flex-col gap-2 lg:hidden">
             {ticking.length > 1 ? (
               <li>
-                <label className="border-line bg-raised flex min-h-13 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
-                  <EveryoneCame ticking={ticking} came={came} setCame={setCame} />
-                  <span className="font-semibold">Everyone came</span>
-                </label>
+                <div className="border-line bg-raised rounded-lg border px-3 py-2">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-3">
+                    <EveryoneCame ticking={ticking} came={came} setCame={setCame} />
+                    <span className="font-semibold">Everyone came</span>
+                  </label>
+                  {sol ? (
+                    <div className="mt-1 flex flex-col pl-9">
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+                        <TickAll label="All recited the verse" among={cameIds} ticked={verse} setTicked={setVerse} />
+                        All recited the verse
+                      </label>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+                        <TickAll
+                          label="All handed in the devotional"
+                          among={cameIds}
+                          ticked={devotional}
+                          setTicked={setDevotional}
+                        />
+                        All handed in the devotional
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
               </li>
             ) : null}
             {ticking.map((s) => (
-              <li key={s.enrollment_id}>
-                <label className="border-line flex min-h-13 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2">
+              // SOL's card holds the two ticks under the name, inside the card (decision 0514).
+              <li key={s.enrollment_id} className={sol ? 'border-line rounded-lg border' : undefined}>
+                <label
+                  className={cn(
+                    'flex min-h-13 cursor-pointer items-center gap-3 px-3 py-2',
+                    !sol && 'border-line rounded-lg border',
+                  )}
+                >
                   <input
                     type="checkbox"
                     className="accent-accent size-6 shrink-0"
@@ -354,6 +424,16 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                     ) : null}
                   </span>
                 </label>
+                {sol ? (
+                  <SolTicks
+                    student={s}
+                    came={came.has(s.enrollment_id)}
+                    verse={verse}
+                    devotional={devotional}
+                    onVerse={(on) => flip(setVerse, s.enrollment_id, on)}
+                    onDevotional={(on) => flip(setDevotional, s.enrollment_id, on)}
+                  />
+                ) : null}
               </li>
             ))}
           </ul>
@@ -370,6 +450,27 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                   </label>
                 </HeaderCell>
                 <HeaderCell>Name</HeaderCell>
+                {sol ? (
+                  <>
+                    <HeaderCell>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                        <TickAll label="All recited the verse" among={cameIds} ticked={verse} setTicked={setVerse} />
+                        Memory verse
+                      </label>
+                    </HeaderCell>
+                    <HeaderCell>
+                      <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                        <TickAll
+                          label="All handed in the devotional"
+                          among={cameIds}
+                          ticked={devotional}
+                          setTicked={setDevotional}
+                        />
+                        Devotional
+                      </label>
+                    </HeaderCell>
+                  </>
+                ) : null}
                 <HeaderCell>Cell leader</HeaderCell>
                 <HeaderCell>Guide</HeaderCell>
               </tr>
@@ -397,6 +498,39 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                       </span>
                     ) : null}
                   </th>
+                  {sol ? (
+                    came.has(s.enrollment_id) ? (
+                      <>
+                        <td className="px-1 py-0">
+                          <label className="flex min-h-12 min-w-12 cursor-pointer items-center justify-center">
+                            <input
+                              type="checkbox"
+                              aria-label={`${s.person.full_name ?? 'This student'} recited the memory verse`}
+                              className="accent-accent size-6"
+                              checked={verse.has(s.enrollment_id)}
+                              onChange={(event) => flip(setVerse, s.enrollment_id, event.target.checked)}
+                            />
+                          </label>
+                        </td>
+                        <td className="px-1 py-0">
+                          <label className="flex min-h-12 min-w-12 cursor-pointer items-center justify-center">
+                            <input
+                              type="checkbox"
+                              aria-label={`${s.person.full_name ?? 'This student'} handed in the devotional`}
+                              className="accent-accent size-6"
+                              checked={devotional.has(s.enrollment_id)}
+                              onChange={(event) => flip(setDevotional, s.enrollment_id, event.target.checked)}
+                            />
+                          </label>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="text-muted px-3 py-2 text-center">At make-up</td>
+                        <td className="text-muted px-3 py-2 text-center">At make-up</td>
+                      </>
+                    )
+                  ) : null}
                   <td className="px-3 py-2">{s.cell_leader?.full_name ?? 'none'}</td>
                   <td className="px-3 py-2">{s.guide?.full_name ?? 'none yet'}</td>
                 </tr>
@@ -432,6 +566,12 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
             {absent
               .map((s) => `${s.person.full_name ?? 'Somebody'} (Cell leader ${s.cell_leader?.full_name ?? 'none'})`)
               .join(', ')}
+            {sol ? (
+              <span className="font-semibold">
+                {' '}
+                · Memory verse {verseCount} · Devotional {devotionalCount}
+              </span>
+            ) : null}
           </p>
         </>
       )}
@@ -501,6 +641,54 @@ function EveryoneCame({
   );
 }
 
+/**
+ * A SOL student's two ticks on a phone card, under the name (decision 0514, point 8, as approved);
+ * *At make-up* in their place for somebody not ticked as came (point 9).
+ */
+function SolTicks({
+  student,
+  came,
+  verse,
+  devotional,
+  onVerse,
+  onDevotional,
+}: {
+  student: AttendanceStudent;
+  came: boolean;
+  verse: Set<string>;
+  devotional: Set<string>;
+  onVerse: (on: boolean) => void;
+  onDevotional: (on: boolean) => void;
+}) {
+  if (!came) {
+    return <p className="text-muted px-3 pb-2 pl-12 text-xs">Memory verse and devotional at make-up</p>;
+  }
+  return (
+    <div className="flex flex-col px-3 pb-2 pl-12">
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+        <input
+          type="checkbox"
+          aria-label={`${student.person.full_name ?? 'This student'} recited the memory verse`}
+          className="accent-accent size-6 shrink-0"
+          checked={verse.has(student.enrollment_id)}
+          onChange={(event) => onVerse(event.target.checked)}
+        />
+        Memory verse
+      </label>
+      <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm">
+        <input
+          type="checkbox"
+          aria-label={`${student.person.full_name ?? 'This student'} handed in the devotional`}
+          className="accent-accent size-6 shrink-0"
+          checked={devotional.has(student.enrollment_id)}
+          onChange={(event) => onDevotional(event.target.checked)}
+        />
+        Devotional
+      </label>
+    </div>
+  );
+}
+
 /** A lesson read, for a Guide, the Coordinator, or a lesson whose week has closed. */
 function LessonRead({ data, lesson }: { data: ClassAttendance; lesson: ClassLesson }) {
   return (
@@ -529,7 +717,7 @@ function LessonRead({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
                         : 'Joined after it, to make up'
                       : `${mark.came ? 'Came' : mark.made_up_on ? 'Made up' : 'Absent'}${
                           mark.from_class ? `, in ${mark.from_class.name}` : ''
-                        }`}
+                        }${solItemsWords(mark)}`}
                 </span>
               </li>
             );
@@ -538,6 +726,16 @@ function LessonRead({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
       )}
     </div>
   );
+}
+
+/** SOL's two ticks in words, for a lesson read; nothing for Life Class or somebody still to make up. */
+function solItemsWords(mark: AttendanceStudent['marks'][number]): string {
+  if (mark.verse === undefined || mark.verse === null) {
+    return '';
+  }
+  const verse = mark.verse || mark.verse_brought_on ? 'verse ✓' : 'verse ✗';
+  const devotional = mark.devotional || mark.devotional_brought_on ? 'devotional ✓' : 'devotional ✗';
+  return ` · ${verse} · ${devotional}`;
 }
 
 /**
@@ -588,6 +786,7 @@ function Owed({ data }: { data: ClassAttendance }) {
       <MakeUpDialog
         key={making ? `${making.enrollment_id}:${making.lesson}` : 'none'}
         classId={data.class.id}
+        sol={data.class.level === 'SOL_1'}
         owed={making}
         onClose={() => setMaking(null)}
       />
@@ -601,19 +800,29 @@ function manilaToday(): string {
 
 function MakeUpDialog({
   classId,
+  sol,
   owed,
   onClose,
 }: {
   classId: string;
+  sol: boolean;
   owed: ClassAttendance['owed'][number] | null;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const [madeUpOn, setMadeUpOn] = useState(manilaToday());
+  // SOL's make-up says whether the verse was recited and the devotional handed in (0514, point 9).
+  const [verse, setVerse] = useState(false);
+  const [devotional, setDevotional] = useState(false);
   const [writeKey, renewWriteKey] = useWriteKey();
   const save = useMutation({
     mutationFn: () => {
-      const body = { enrollment_id: owed!.enrollment_id, lesson: owed!.lesson, made_up_on: madeUpOn };
+      const body = {
+        enrollment_id: owed!.enrollment_id,
+        lesson: owed!.lesson,
+        made_up_on: madeUpOn,
+        ...(sol ? { verse, devotional } : {}),
+      };
       return recordMakeUp(classId, body, idempotencyKeyFor('equipping-make-up', writeKey, { classId, ...body }));
     },
     onSuccess: async () => {
@@ -639,6 +848,28 @@ function MakeUpDialog({
           required
         />
       </div>
+      {sol && owed ? (
+        <div className="mt-3 flex flex-col">
+          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="accent-accent size-6 shrink-0"
+              checked={verse}
+              onChange={(event) => setVerse(event.target.checked)}
+            />
+            Recited the L{owed.lesson} memory verse
+          </label>
+          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              className="accent-accent size-6 shrink-0"
+              checked={devotional}
+              onChange={(event) => setDevotional(event.target.checked)}
+            />
+            Handed in the L{owed.lesson} devotional
+          </label>
+        </div>
+      ) : null}
       <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
       <DialogActions>
         <Button type="button" disabled={save.isPending || madeUpOn === ''} onClick={() => save.mutate()}>

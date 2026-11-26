@@ -512,6 +512,7 @@ export function tryLabel(tryNumber: number | undefined): string | null {
 export interface MyClass {
   id: string;
   name: string;
+  level: EquippingLevel;
   day_of_week: number;
   time_of_day: string;
   first_lesson_on: string;
@@ -577,13 +578,65 @@ export interface AttendanceStudent {
     before_joining: boolean;
     /** The class it was marked in, for a student moved since; null for this class. */
     from_class: { id: string; name: string } | null;
+    /** SOL: the memory verse and devotional, from the lesson or its make-up (decision 0514). */
+    verse?: boolean | null;
+    devotional?: boolean | null;
+    /** SOL: the day each was brought, if it came after the lesson (decision 0514, point 10). */
+    verse_brought_on?: string | null;
+    devotional_brought_on?: string | null;
   }[];
+  /**
+   * SOL's quiz, book and counts (decision 0514, point 8); absent on Life Class. A corrected try
+   * names the score it replaced, and a try left behind by an earlier one corrected to a pass is
+   * kept and not counted (owner, 2026-11-26).
+   */
+  quiz?: {
+    tries: {
+      try: number;
+      score: number;
+      corrected_from?: number;
+      corrected_by?: { account_id: string; full_name: string | null } | null;
+      corrected_on?: string;
+    }[];
+    not_counted?: { try: number; score: number }[];
+    passed: boolean;
+    retakes_left: number;
+    may_add_try: boolean;
+  };
+  /** SOL: each verse or devotional ticked late, which the Teacher may untick (owner, 2026-11-26). */
+  brought_late?: {
+    lesson: number;
+    item: SolItem;
+    brought_on: string;
+    ticked_by: { account_id: string; full_name: string | null } | null;
+  }[];
+  book_read?: boolean;
+  verses?: number;
+  devotionals?: number;
+  still_missing?: {
+    make_ups: number[];
+    verses: number[];
+    devotionals: number[];
+    quiz: boolean;
+    book: boolean;
+  };
 }
+
+/** One row of SOL's *Verses and devotionals still owed* (decision 0514, point 10). */
+export interface OwedItems {
+  enrollment_id: string;
+  person: { id: string; full_name: string | null; list_name?: string | null };
+  cell_leader: { id: string; full_name: string | null } | null;
+  lessons: { lesson: number; items: SolItem[]; owed_since: string; made_up: boolean }[];
+}
+
+export type SolItem = 'VERSE' | 'DEVOTIONAL';
 
 export interface ClassAttendance {
   class: {
     id: string;
     name: string;
+    level: EquippingLevel;
     day_of_week: number;
     time_of_day: string;
     place: string | null;
@@ -602,6 +655,9 @@ export interface ClassAttendance {
     held_on: string | null;
     before_joining: boolean;
   }[];
+  /** SOL: the quiz's number of items, null until the Teacher enters it. */
+  quiz?: { items: number | null };
+  owed_items?: OwedItems[];
 }
 
 export async function getClassAttendance(classId: string, signal?: AbortSignal): Promise<ClassAttendance> {
@@ -611,7 +667,14 @@ export async function getClassAttendance(classId: string, signal?: AbortSignal):
 export async function saveLesson(
   classId: string,
   lesson: number,
-  body: { held_on: string; came: string[]; version?: number; correction_reason?: string },
+  body: {
+    held_on: string;
+    came: string[];
+    verse?: string[];
+    devotional?: string[];
+    version?: number;
+    correction_reason?: string;
+  },
   idempotencyKey: string,
 ): Promise<{ lesson: number; version: number; came: number; absent: number }> {
   return authenticatedRequest(
@@ -622,10 +685,71 @@ export async function saveLesson(
 
 export async function recordMakeUp(
   classId: string,
-  body: { enrollment_id: string; lesson: number; made_up_on: string },
+  body: { enrollment_id: string; lesson: number; made_up_on: string; verse?: boolean; devotional?: boolean },
   idempotencyKey: string,
 ): Promise<unknown> {
   return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/make-ups`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+/** A SOL verse or devotional brought after its lesson (decision 0514, point 10). */
+export async function recordItemsBrought(
+  classId: string,
+  body: { enrollment_id: string; lesson: number; items: SolItem[]; brought_on: string },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/items-brought`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+/** A late verse or devotional ticked by mistake, unticked (owner, 2026-11-26). */
+export async function untickItemBrought(
+  classId: string,
+  body: { enrollment_id: string; lesson: number; item: SolItem },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/items-brought/untick`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+/** A SOL class's quiz: its number of items (decision 0501, point 18). */
+export async function setQuiz(classId: string, body: { items: number }, idempotencyKey: string): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/quiz`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+/** One SOL quiz try's score (decision 0501, point 18; owner, 2026-11-26). */
+export async function recordQuizTry(
+  classId: string,
+  body: { enrollment_id: string; try: number; score: number },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/quiz-tries`, {
+    method: 'POST',
+    body,
+    idempotencyKey,
+  });
+}
+
+/** Whether a SOL student read the book (decision 0501, point 18; owner, 2026-11-26). */
+export async function recordBook(
+  classId: string,
+  body: { enrollment_id: string; read: boolean },
+  idempotencyKey: string,
+): Promise<unknown> {
+  return authenticatedRequest(`/api/v1/equipping/classes/${encodeURIComponent(classId)}/books`, {
     method: 'POST',
     body,
     idempotencyKey,

@@ -467,6 +467,7 @@ export async function mockMyClasses(page: Page): Promise<void> {
           {
             id: CLASS_ID,
             name: 'Life Class A',
+            level: 'LIFE_CLASS',
             day_of_week: 2,
             time_of_day: '19:00',
             first_lesson_on: '2026-11-03',
@@ -475,6 +476,7 @@ export async function mockMyClasses(page: Page): Promise<void> {
           {
             id: '3f1b7c6e-0000-4000-8000-00000000e002',
             name: 'Life Class C',
+            level: 'LIFE_CLASS',
             day_of_week: 6,
             time_of_day: '15:00',
             first_lesson_on: '2026-11-07',
@@ -576,6 +578,7 @@ export async function mockClassAttendance(
     class: {
       id: CLASS_ID,
       name: 'Life Class A',
+      level: 'LIFE_CLASS',
       day_of_week: 2,
       time_of_day: '19:00',
       place: 'Room 2',
@@ -1026,4 +1029,155 @@ export async function mockCandidate(page: Page, tries: boolean, joins = false): 
       }),
     ),
   );
+}
+
+/**
+ * SOL 1 A's register (decision 0514, points 8 to 10): ten lessons, 1 and 2 saved and 3 late.
+ * Efren came to L1 with both ticks, missed L2 and owes its make-up, and passed the quiz on his
+ * first try and read the book. Imelda came to L1 without her devotional, a week now closed, and
+ * made L2 up with the verse and without the devotional; she took the quiz once at 60%. Records
+ * what each write sent.
+ */
+export async function mockSolAttendance(
+  page: Page,
+  options: { notCounted?: boolean } = {},
+): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const lesson = (n: number, expected: string, extra: object) => ({
+    lesson: n,
+    expected_on: expected,
+    held_on: null,
+    version: null,
+    state: 'NOT_YET',
+    open: true,
+    closes_at: '2026-12-31T16:00:00.000Z',
+    ...extra,
+  });
+  const mark = (n: number, held: string, extra: object) => ({
+    lesson: n,
+    held_on: held,
+    came: true,
+    made_up_on: null,
+    before_joining: false,
+    from_class: null,
+    verse: null,
+    devotional: null,
+    verse_brought_on: null,
+    devotional_brought_on: null,
+    ...extra,
+  });
+  const days = ['03', '10', '17', '24'];
+  const body = {
+    class: {
+      id: CLASS_ID,
+      name: 'SOL 1 A',
+      level: 'SOL_1',
+      day_of_week: 2,
+      time_of_day: '19:00',
+      place: 'Room 2',
+      first_lesson_on: '2026-11-03',
+    },
+    role: 'TEACHER',
+    may_record: true,
+    may_correct_closed: false,
+    lessons: [
+      lesson(1, '2026-11-03', { held_on: '2026-11-03', version: 1, state: 'SAVED', open: false }),
+      lesson(2, '2026-11-10', { held_on: '2026-11-10', version: 1, state: 'SAVED' }),
+      lesson(3, '2026-11-17', { state: 'LATE' }),
+      ...[4, 5, 6, 7, 8, 9, 10].map((n) =>
+        lesson(n, `2026-${n < 5 ? '11' : '12'}-${n < 5 ? days[n - 1] : String(n * 7 - 34).padStart(2, '0')}`, {}),
+      ),
+    ],
+    students: [
+      {
+        enrollment_id: STUDENT_EFREN,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao', list_name: 'Quiambao, Efren' },
+        cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
+        guide: { id: '3f1b7c6e-0000-4000-8000-00000000b601', full_name: 'Benjie Lacson' },
+        joined_on: '2026-11-02',
+        carried: null,
+        encounter: null,
+        marks: [
+          mark(1, '2026-11-03', { verse: true, devotional: false, devotional_brought_on: '2026-11-24' }),
+          mark(2, '2026-11-10', { came: false }),
+        ],
+        // Try 1 corrected from 12, by the Admin (owner, 2026-11-26).
+        quiz: {
+          tries: [
+            {
+              try: 1,
+              score: 15,
+              corrected_from: 12,
+              corrected_by: { account_id: '3f1b7c6e-0000-4000-8000-00000000b701', full_name: 'Ada Ramos' },
+              corrected_on: '2026-11-20',
+            },
+          ],
+          not_counted: options.notCounted ? [{ try: 2, score: 13 }] : [],
+          passed: true,
+          retakes_left: 0,
+          may_add_try: false,
+        },
+        brought_late: [
+          {
+            lesson: 1,
+            item: 'DEVOTIONAL',
+            brought_on: '2026-11-24',
+            ticked_by: { account_id: '3f1b7c6e-0000-4000-8000-00000000b701', full_name: 'Ada Ramos' },
+          },
+        ],
+        book_read: true,
+        verses: 1,
+        devotionals: 1,
+        still_missing: { make_ups: [2], verses: [], devotionals: [], quiz: false, book: false },
+      },
+      {
+        enrollment_id: STUDENT_IMELDA,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b402', full_name: 'Imelda Tolentino', list_name: 'Tolentino, Imelda' },
+        cell_leader: null,
+        guide: null,
+        joined_on: '2026-11-02',
+        carried: null,
+        encounter: null,
+        marks: [
+          mark(1, '2026-11-03', { verse: true, devotional: false }),
+          mark(2, '2026-11-10', { came: false, made_up_on: '2026-11-20', verse: true, devotional: false }),
+        ],
+        quiz: { tries: [{ try: 1, score: 12 }], passed: false, retakes_left: 2, may_add_try: true },
+        book_read: false,
+        verses: 2,
+        devotionals: 0,
+        still_missing: { make_ups: [], verses: [], devotionals: [1, 2], quiz: true, book: true },
+      },
+    ],
+    owed: [
+      {
+        enrollment_id: STUDENT_EFREN,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b401', full_name: 'Efren Quiambao', list_name: 'Quiambao, Efren' },
+        cell_leader: { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' },
+        lesson: 2,
+        held_on: '2026-11-10',
+        before_joining: false,
+      },
+    ],
+    quiz: { items: 20 },
+    owed_items: [
+      {
+        enrollment_id: STUDENT_IMELDA,
+        person: { id: '3f1b7c6e-0000-4000-8000-00000000b402', full_name: 'Imelda Tolentino', list_name: 'Tolentino, Imelda' },
+        cell_leader: null,
+        lessons: [
+          { lesson: 1, items: ['DEVOTIONAL'], owed_since: '2026-11-03', made_up: false },
+          { lesson: 2, items: ['DEVOTIONAL'], owed_since: '2026-11-20', made_up: true },
+        ],
+      },
+    ],
+  };
+  await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/attendance`, (route) => route.fulfill(json(body)));
+  for (const path of ['lessons/*', 'make-ups', 'items-brought', 'items-brought/untick', 'quiz', 'quiz-tries', 'books']) {
+    await page.route(`**/api/v1/equipping/classes/${CLASS_ID}/${path}`, (route) => {
+      sent.push({ url: route.request().url(), body: route.request().postDataJSON() as unknown });
+      return route.fulfill(json({}, 201));
+    });
+  }
+  return { sent };
 }

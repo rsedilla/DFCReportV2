@@ -740,12 +740,14 @@ export class EquippingService {
     const live = rows.filter((row) => row.cancelled_at === null);
     const today = await this.manilaToday();
     const staffing = await this.staffingOf(live.map((row) => row.id));
-    // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22).
-    // Life Class's alone: SOL 1's register is not built yet, so it owes no lesson (decision 0514).
+    // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22),
+    // each level by its own lessons: SOL's ten since its register is built (decision 0514).
     const problems = await this.attendance.lessonProblemsOf(
-      live
-        .filter((row) => row.level === 'LIFE_CLASS')
-        .map((row) => ({ id: row.id, first_lesson_on: String(row.first_lesson_on) })),
+      live.map((row) => ({
+        id: row.id,
+        level: row.level,
+        first_lesson_on: String(row.first_lesson_on),
+      })),
     );
     return {
       // The level's other Coordinators, for the subtitle (decision 0514).

@@ -23,7 +23,6 @@ import { PersonViewsService } from '../people/person-views.service';
 import {
   ChangeGradeDto,
   CheckGradesDto,
-  GradeChangePreviewDto,
   CorrectClassDto,
   EncounterAttendanceDto,
   EncounterQueryDto,
@@ -31,17 +30,23 @@ import {
   EnrollEncounterDto,
   EquippingLevelDto,
   EquippingSearchDto,
-  EquippingTermOnlyDto,
   EquippingTermDto,
+  EquippingTermOnlyDto,
+  GradeChangePreviewDto,
   GuideSearchDto,
   ListRegistrationsDto,
   MoveEnrollmentDto,
   NameGuideDto,
   OpenClassDto,
   ReasonDto,
+  RecordBookDto,
+  RecordItemsBroughtDto,
+  UntickItemBroughtDto,
   RecordMakeUpDto,
+  RecordQuizTryDto,
   RegisterDto,
   SaveLessonDto,
+  SetQuizDto,
   SetTeacherDto,
   SwapGuideDto,
   TeacherClashDto,
@@ -447,8 +452,8 @@ export class EquippingController {
     @CurrentActor() actor: Actor,
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    if (!/^[1-9]$/.test(lesson)) {
-      throw new ValidationFailedError('A lesson is a number from 1 to 9.', { field: 'lesson' });
+    if (!/^(?:[1-9]|10)$/.test(lesson)) {
+      throw new ValidationFailedError('A lesson is a number from 1 to 10.', { field: 'lesson' });
     }
     return this.attendance.saveLesson(actor, id, Number(lesson), body, claim);
   }
@@ -464,6 +469,71 @@ export class EquippingController {
     @CurrentIdempotency() claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.attendance.recordMakeUp(actor, id, body, claim);
+  }
+
+  /** A SOL verse or devotional brought after its lesson (decision 0514, point 10). */
+  @Post('classes/:id/items-brought')
+  @HttpCode(201)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async recordItemsBrought(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: RecordItemsBroughtDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.recordItemsBrought(actor, id, body, claim);
+  }
+
+  /** A late verse or devotional ticked by mistake, unticked (owner, 2026-11-26). */
+  @Post('classes/:id/items-brought/untick')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async untickItemBrought(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: UntickItemBroughtDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.untickItemBrought(actor, id, body, claim);
+  }
+
+  /** A SOL class's quiz: its number of items (decision 0501, point 18). */
+  @Post('classes/:id/quiz')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async setQuiz(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: SetQuizDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.setQuiz(actor, id, body, claim);
+  }
+
+  /** One SOL quiz try's score (decision 0501, point 18; owner, 2026-11-26). */
+  @Post('classes/:id/quiz-tries')
+  @HttpCode(201)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async recordQuizTry(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: RecordQuizTryDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.recordQuizTry(actor, id, body, claim);
+  }
+
+  /** Whether a SOL student read the book (decision 0501, point 18; owner, 2026-11-26). */
+  @Post('classes/:id/books')
+  @HttpCode(200)
+  @RequiresCapability(Capability.EquippingClass, { kind: 'actor' })
+  async recordBook(
+    @Param('id', new UuidParamPipe('id')) id: string,
+    @Body() body: RecordBookDto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.attendance.recordBook(actor, id, body, claim);
   }
 
   /** *Swap Guide* for one student (decision 0501, point 8). */

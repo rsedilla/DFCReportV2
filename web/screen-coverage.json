@@ -615,6 +615,26 @@
       "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
     },
     {
+      "route": "POST /api/v1/equipping/classes/:id/items-brought",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/items-brought/untick",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/quiz",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/quiz-tries",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
+      "route": "POST /api/v1/equipping/classes/:id/books",
+      "screen": "web/app/(app)/equipping/teach/[id]/page.tsx"
+    },
+    {
       "route": "GET /api/v1/equipping/guides",
       "screen": "web/app/(app)/equipping/classes/page.tsx"
     },
