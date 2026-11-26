@@ -19,7 +19,7 @@ for (const width of [320, 1280]) {
   test(`at ${width}px each person found has a Choose button, and choosing shows them with Change`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await page.goto('/equipping/registration');
-    await page.getByRole('button', { name: 'Register a person' }).click();
+    await page.getByRole('button', { name: 'Register for Life Class' }).click();
     const dialog = page.getByRole('dialog', { name: 'Register for Life Class' });
     await dialog.getByLabel('Person').fill('wil');
     await dialog.getByRole('button', { name: 'Search' }).click();

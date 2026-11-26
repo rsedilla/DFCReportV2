@@ -36,6 +36,8 @@ export interface AccountListRow {
   approves_cells: boolean;
   moves_people: boolean;
   coordinates_life_class: boolean;
+  /** SOL 1 Coordinator (decision 0514). */
+  coordinates_sol_1: boolean;
 }
 
 type Eb = ExpressionBuilder<Database, 'accounts'>;
@@ -53,6 +55,64 @@ type Eb = ExpressionBuilder<Database, 'accounts'>;
 @Injectable()
 export class AccountsListService {
   constructor(@Inject(DATABASE) private readonly db: Db) {}
+
+  /**
+   * **Who coordinates each level** (decision 0514): the *Coordinators* list at the top of the
+   * Admin's Accounts tab, one row a level, each name linking to its Account view. An account is
+   * listed while its tick is on, with Full view, a current `LEADER` row and an account that is not
+   * disabled, a disabled one signing nobody in (section 6). In first-name order (decision 0359).
+   */
+  async coordinators(): Promise<
+    {
+      level: 'LIFE_CLASS' | 'SOL_1';
+      people: { account_id: string; person_id: string; name: string }[];
+    }[]
+  > {
+    const rows = await this.db
+      .selectFrom('accounts')
+      .innerJoin('persons', 'persons.id', 'accounts.person_id')
+      .select([
+        'accounts.id as account_id',
+        'accounts.person_id as person_id',
+        'accounts.coordinates_life_class as coordinates_life_class',
+        'accounts.coordinates_sol_1 as coordinates_sol_1',
+        'persons.title as title',
+        'persons.first_name as first_name',
+        'persons.middle_name as middle_name',
+        'persons.last_name as last_name',
+      ])
+      .where('accounts.full_view', '=', true)
+      .where('accounts.status', '<>', 'DISABLED')
+      .where((eb) =>
+        eb.or([
+          eb('accounts.coordinates_life_class', '=', true),
+          eb('accounts.coordinates_sol_1', '=', true),
+        ]),
+      )
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('account_roles')
+            .select('account_roles.id')
+            .whereRef('account_roles.account_id', '=', 'accounts.id')
+            .where('account_roles.role', '=', 'LEADER')
+            .where('account_roles.revoked_at', 'is', null),
+        ),
+      )
+      .orderBy('persons.first_name')
+      .orderBy('persons.last_name')
+      .orderBy('persons.member_id')
+      .execute();
+    const shape = (row: (typeof rows)[number]) => ({
+      account_id: row.account_id,
+      person_id: row.person_id,
+      name: composeName(row),
+    });
+    return [
+      { level: 'LIFE_CLASS', people: rows.filter((row) => row.coordinates_life_class).map(shape) },
+      { level: 'SOL_1', people: rows.filter((row) => row.coordinates_sol_1).map(shape) },
+    ];
+  }
 
   async list(options: {
     network: NetworkName | null;
@@ -86,6 +146,7 @@ export class AccountsListService {
         'accounts.approves_cells as approves_cells',
         'accounts.moves_people as moves_people',
         'accounts.coordinates_life_class as coordinates_life_class',
+        'accounts.coordinates_sol_1 as coordinates_sol_1',
         'persons.member_id as member_id',
         'persons.title as title',
         'persons.first_name as first_name',
@@ -189,6 +250,7 @@ export class AccountsListService {
         approves_cells: row.approves_cells,
         moves_people: row.moves_people,
         coordinates_life_class: row.coordinates_life_class,
+        coordinates_sol_1: row.coordinates_sol_1,
       })),
       nextCursor:
         found.length > limit && last !== undefined

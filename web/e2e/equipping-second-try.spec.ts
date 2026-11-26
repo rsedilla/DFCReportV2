@@ -37,7 +37,7 @@ for (const [tries, shown] of [
   test(`the Register form ${shown ? 'lists each earlier try' : 'shows nothing for a first try'}`, async ({ page }) => {
     await open(page, '/equipping/registration', 1280, tries);
     await mockCandidate(page, tries);
-    await page.getByRole('button', { name: 'Register a person' }).click();
+    await page.getByRole('button', { name: 'Register for Life Class' }).click();
     const dialog = page.getByRole('dialog', { name: 'Register for Life Class' });
     await dialog.getByLabel('Person').fill('wil');
     await dialog.getByRole('button', { name: 'Search' }).click();

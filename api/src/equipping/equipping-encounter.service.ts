@@ -608,26 +608,30 @@ export class EquippingEncounterService {
         network === 'MENS' ? s.mens_encounter_on : s.womens_encounter_on,
       ]),
     );
-    const open = await executor
-      .selectFrom('equipping_enrollments as e')
-      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
-      .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
-      .select([
-        'e.id as enrollment_id',
-        'e.registration_id',
-        'e.started_at',
-        'r.person_id',
-        'c.id as class_id',
-        'c.name as class_name',
-        'c.first_lesson_on',
-        'c.encounter_season_id',
-      ])
-      .where('e.ended_at', 'is', null)
-      .where('r.level', '=', 'LIFE_CLASS')
-      // Joined at Lesson 6, they attended an Encounter in the term that kept lessons 1 to 4
-      // (decision 0512), whichever record it is recorded under.
-      .where('e.carried_from_enrollment_id', 'is', null)
-      .execute();
+    const open = (
+      await executor
+        .selectFrom('equipping_enrollments as e')
+        .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+        .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+        .select([
+          'e.id as enrollment_id',
+          'e.registration_id',
+          'e.started_at',
+          'r.person_id',
+          'c.id as class_id',
+          'c.name as class_name',
+          'c.first_lesson_on',
+          'c.encounter_season_id',
+        ])
+        .where('e.ended_at', 'is', null)
+        .where('r.level', '=', 'LIFE_CLASS')
+        // Joined at Lesson 6, they attended an Encounter in the term that kept lessons 1 to 4
+        // (decision 0512), whichever record it is recorded under.
+        .where('e.carried_from_enrollment_id', 'is', null)
+        .execute()
+    )
+      // A Life Class always names its weekend, a database constraint (migration 0060).
+      .map((row) => ({ ...row, encounter_season_id: row.encounter_season_id! }));
     // Their class's weekend on or before this one.
     const inReach = open.filter(
       (row) => (weekendOfSeason.get(canonicalId(row.encounter_season_id)) ?? '9999') <= weekend.on,

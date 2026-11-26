@@ -28,7 +28,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { resolverOf } from '../common/merged-identity';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { Database } from '../database/schema';
+import type { Database, EquippingLevel } from '../database/schema';
 import type { RecordMakeUpDto, SaveLessonDto } from './dto/equipping.dto';
 
 /**
@@ -74,9 +74,25 @@ export function unrecordedState(expected: string, now: Date): LessonState {
   return due !== null && now.getTime() >= due.getTime() ? 'LATE' : 'TO_RECORD';
 }
 
+/**
+ * **SOL 1's register, final grades and posting are not built yet** (decision 0514): they come
+ * with steps 2 and 3 of SOL 1. Until then a SOL 1 class reaches none of Life Class's, whose nine
+ * lessons, Encounter and posting would grade it and file a Life Class graduation. Removed by the
+ * step that builds each.
+ */
+export function refuseSolNotBuilt(cls: { name: string; level: string }): void {
+  if (cls.level !== 'LIFE_CLASS') {
+    throw new InvariantViolationError(
+      `${cls.name} is a SOL 1 class, and SOL 1's register and grades are not built yet.`,
+      { field: 'class_id' },
+    );
+  }
+}
+
 interface ClassRow {
   id: string;
   name: string;
+  level: EquippingLevel;
   day_of_week: number;
   time_of_day: string;
   place: string | null;
@@ -163,6 +179,8 @@ export class EquippingAttendanceService {
       )
       // A cancelled class is listed only on the Coordinator's *Cancelled* (decision 0510).
       .where('c.cancelled_at', 'is', null)
+      // SOL 1's register is not built yet (decision 0514).
+      .where('c.level', '=', 'LIFE_CLASS')
       .orderBy('c.first_lesson_on', 'desc')
       .orderBy('c.name')
       .execute();
@@ -197,6 +215,8 @@ export class EquippingAttendanceService {
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
         .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+        // A leader's SOL 1 card comes with its own step (decision 0514).
+        .where('c.level', '=', 'LIFE_CLASS')
         .leftJoin('equipping_guide_students as gs', (join) =>
           join.onRef('gs.enrollment_id', '=', 'e.id').on('gs.ended_at', 'is', null),
         )
@@ -345,6 +365,7 @@ export class EquippingAttendanceService {
     if (cls.cancelled_at !== null) {
       throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
     }
+    refuseSolNotBuilt(cls);
 
     let enrolled = await this.db
       .selectFrom('equipping_enrollments as e')
@@ -548,6 +569,7 @@ export class EquippingAttendanceService {
       }
       // What the class's state refuses is told only to somebody the check above admits.
       this.refuseCancelled(cls);
+      refuseSolNotBuilt(cls);
       await this.refusePostedWithin(trx, cls);
       const now = await databaseNow(trx);
       const today = manilaDayOf(now);
@@ -890,6 +912,7 @@ export class EquippingAttendanceService {
         );
       }
       this.refuseCancelled(cls);
+      refuseSolNotBuilt(cls);
       await this.refusePostedWithin(trx, cls);
       const student = await trx
         .selectFrom('equipping_enrollments as e')
@@ -1328,6 +1351,7 @@ export class EquippingAttendanceService {
       .select([
         'id',
         'name',
+        'level',
         'day_of_week',
         'time_of_day',
         'place',
@@ -1369,6 +1393,7 @@ export class EquippingAttendanceService {
       .select([
         'id',
         'name',
+        'level',
         'day_of_week',
         'time_of_day',
         'place',
@@ -1413,8 +1438,10 @@ export class EquippingAttendanceService {
     actor: Actor,
     cls: ClassRow,
   ): Promise<Standing> {
-    const [authority, guide] = await Promise.all([
+    const [authority, levels, guide] = await Promise.all([
       this.authorization.authorityFor(actor.accountId),
+      // A Coordinator sees the whole class only at a level they coordinate (decision 0514).
+      this.authorization.coordinatedLevels(actor.accountId),
       executor
         .selectFrom('equipping_class_guides')
         .select('id')
@@ -1429,7 +1456,9 @@ export class EquippingAttendanceService {
         canonicalId(cls.teacher_person_id) === canonicalId(actor.personId),
       guideId: guide?.id ?? null,
       wide: holdsWholeChurch(authority, Capability.EquippingClass),
-      coordinates: holdsWholeChurch(authority, Capability.EquippingCoordinate),
+      coordinates:
+        holdsWholeChurch(authority, Capability.EquippingCoordinate) &&
+        (levels === 'ALL' || levels.has(cls.level)),
     };
   }
 }

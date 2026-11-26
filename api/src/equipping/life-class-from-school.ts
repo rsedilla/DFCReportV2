@@ -48,6 +48,8 @@ export async function lifeClassFiledOf(
       'c.life_class_weekend',
     ])
     .where('finalGradeIds' in where ? 'c.final_grade_id' : 'r.person_id', 'in', [...ids])
+    // A Life Class grade, never another level's (decision 0514).
+    .where('r.level', '=', 'LIFE_CLASS')
     .execute();
   // The weekend a posted Not yet passed at: the record of having come written in the same
   // transaction as `passed_later_at`, which `now()` makes the same instant.

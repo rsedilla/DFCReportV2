@@ -21,7 +21,9 @@ import {
   type AccountListRow,
   accountStatusLabel,
   getAccountCounts,
+  getCoordinators,
   listAccounts,
+  type LevelCoordinators,
 } from '@/lib/accounts';
 import {
   AUDIT_KINDS,
@@ -453,8 +455,71 @@ function detailsOf(row: AccountListRow, wholeChurch: boolean): string {
     row.moves_people ? 'Moves people' : null,
     // Not shown to a Network Admin (decision 0506).
     wholeChurch && row.coordinates_life_class ? 'Life Class Coordinator' : null,
+    wholeChurch && row.coordinates_sol_1 ? 'SOL 1 Coordinator' : null,
   ].filter((tick): tick is string => tick !== null);
   return ticks.length > 0 ? ticks.join(', ') : 'Recording only';
+}
+
+const LEVEL_LABELS: Record<LevelCoordinators['level'], string> = {
+  LIFE_CLASS: 'Life Class',
+  SOL_1: 'SOL 1',
+};
+
+/**
+ * **Who coordinates each level** (decision 0514), at the top of the Accounts tab, above the
+ * search: one row a level the school runs, each name linking to that person's Account view, and
+ * *None yet* where nobody is ticked. The Admin's alone; a Network Admin is not shown it.
+ */
+function Coordinators() {
+  const coordinators = useQuery({
+    queryKey: ['account-coordinators'],
+    queryFn: () => getCoordinators(),
+  });
+  return (
+    <section aria-labelledby="coordinators-heading" className="mt-4">
+      <h2 id="coordinators-heading" className="text-lg font-semibold">
+        Coordinators
+      </h2>
+      <p className="text-muted text-sm">
+        Who opens each level&apos;s classes. Change it on the person&apos;s Account view.
+      </p>
+      <FailureNotice failure={coordinators.isError ? describeFailure(coordinators.error) : null} />
+      {coordinators.data ? (
+        <Table caption="Coordinators of each level" className="mt-3">
+          <thead>
+            <tr>
+              <HeaderCell>Level</HeaderCell>
+              <HeaderCell>Coordinators</HeaderCell>
+            </tr>
+          </thead>
+          <tbody>
+            {coordinators.data.data.map((row) => (
+              <tr key={row.level} className={rowClasses}>
+                <td className="px-3 py-3">{LEVEL_LABELS[row.level]}</td>
+                <td className="px-3 py-3">
+                  {row.people.length === 0 ? (
+                    <span className="text-muted">None yet</span>
+                  ) : (
+                    row.people.map((person, index) => (
+                      <span key={person.account_id}>
+                        {index > 0 ? ', ' : null}
+                        <Link
+                          href={`/people/${person.person_id}?view=account`}
+                          className="inline-flex min-h-6 items-center underline underline-offset-4"
+                        >
+                          {person.name}
+                        </Link>
+                      </span>
+                    ))
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      ) : null}
+    </section>
+  );
 }
 
 function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
@@ -495,6 +560,7 @@ function Accounts({ wholeChurch }: { wholeChurch: boolean }) {
           </Link>
         </p>
       ) : null}
+      {wholeChurch ? <Coordinators /> : null}
       <div className={`mt-4 ${CONTROL_BAR}`}>
         <form
           onSubmit={(event) => {

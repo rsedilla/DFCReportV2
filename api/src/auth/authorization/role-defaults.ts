@@ -180,12 +180,14 @@ export const LEADER_APPROVES_CELLS: RoleDefaults = {
 };
 
 /**
- * What a Leader account holds only as the Life Class Coordinator (sections 7 and 29, decision
- * 0501): opening Life Class's classes and naming their Teachers, for the whole church, Life
- * Class being split by no Network. Like Approves Cells, it adds only to what the Leader role
- * gives, and only with Full view.
+ * What a Leader account holds as a Coordinator of any level (sections 7 and 29, decisions 0501
+ * and 0514): opening that level's classes and naming their Teachers and Guides, for the whole
+ * church, the school being split by no Network. **One capability for every level, the level
+ * carried on the tick**: `AuthorizationService.coordinatedLevels` says which levels the account's
+ * ticks name, and the school refuses a class of any other. Like Approves Cells, it adds only to
+ * what the Leader role gives, and only with Full view.
  */
-export const LEADER_COORDINATES_LIFE_CLASS: RoleDefaults = {
+export const LEADER_COORDINATES: RoleDefaults = {
   [Capability.EquippingCoordinate]: ScopeType.WholeChurch,
 };
 

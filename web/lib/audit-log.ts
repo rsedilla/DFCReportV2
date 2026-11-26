@@ -100,6 +100,7 @@ const WHAT: Record<string, string> = {
   'account.approves_cells_changed': 'Approves Cells changed',
   'account.moves_people_changed': 'Moves people changed',
   'account.coordinates_life_class_changed': 'Life Class Coordinator changed',
+  'account.coordinates_sol_1_changed': 'SOL 1 Coordinator changed',
   'account.username_set': 'Username set',
   'second_step.set_up': 'Second sign-in step set up',
   'second_step.reset': 'Second sign-in step reset',

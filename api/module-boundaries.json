@@ -154,6 +154,13 @@
     },
     {
       "file": "src/auth/accounts-list.service.ts",
+      "method": "coordinators",
+      "table": "persons",
+      "kind": "join",
+      "reason": "The Admin's Coordinators list names each level's Coordinators (decision 0514) in first-name order. Rooted in accounts, whose ticks say who coordinates, and joined to persons for that name, as the accounts list is."
+    },
+    {
+      "file": "src/auth/accounts-list.service.ts",
       "method": "list",
       "table": "persons",
       "kind": "join",

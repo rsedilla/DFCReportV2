@@ -18,5 +18,7 @@ import { ConquestService } from './conquest.service';
   imports: [HierarchyModule, CellsModule, SuynlModule, PeopleModule, AuthorizationModule],
   controllers: [ConquestController],
   providers: [ConquestService],
+  // The school reads Win 3 through it for SOL 1 (decision 0514).
+  exports: [ConquestService],
 })
 export class ConquestModule {}

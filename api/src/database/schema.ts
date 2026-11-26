@@ -128,6 +128,8 @@ export interface AccountsTable {
    */
   moves_people: Generated<boolean>;
   coordinates_life_class: Generated<boolean>;
+  /** SOL 1 Coordinator (decision 0514): one tick per level, offered only with Full view. */
+  coordinates_sol_1: Generated<boolean>;
   /**
    * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
    * and numbers, unique; both are database constraints. Set only by its holder.
@@ -345,6 +347,8 @@ export type AuditAction =
   // new value, by an administrator. Targets the account.
   | 'account.moves_people_changed'
   | 'account.coordinates_life_class_changed'
+  // SOL 1 Coordinator ticked or cleared (decision 0514), as the Life Class one is.
+  | 'account.coordinates_sol_1_changed'
   // A username set or changed by its holder, with the old and the new (decision 0337).
   // Targets the account.
   | 'account.username_set'
@@ -951,12 +955,19 @@ export interface ConquestConfirmationsTable extends GrowthStatement {
  * LC Party before each, recorded by an administrator. Each party is at least five weeks
  * before its own weekend, a constraint in migration 0019.
  */
-/** Section 29's levels (decision 0499): Life Class first, SOL 1 to 3 later. */
-export type EquippingLevel = 'LIFE_CLASS';
+/** Section 29's levels (decisions 0499 and 0514): Life Class, then SOL 1; SOL 2 and 3 later. */
+export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1';
 
 /** The record requirements a registration can be made despite (decision 0499, point 7). */
 export type EquippingRequirement =
-  'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_LESSONS_1_TO_4';
+  | 'HAS_LEADER'
+  | 'CELL_REGULAR'
+  | 'DCC_REGULAR'
+  | 'SUYNL_LESSONS_1_TO_4'
+  // SOL 1's three (decision 0501, point 18; decision 0514).
+  | 'LIFE_CLASS_PASSED'
+  | 'WIN_3'
+  | 'SOL_1_MANUAL';
 
 /** A class of one level in one term (section 29, migration 0050). Never deleted. */
 export interface EquippingClassesTable {
@@ -972,7 +983,8 @@ export interface EquippingClassesTable {
   place: string | null;
   first_lesson_on: DateOnly;
   teacher_person_id: string | null;
-  encounter_season_id: string;
+  /** Life Class names its Encounter weekend; a SOL 1 class names none (migration 0060). */
+  encounter_season_id: string | null;
   run_by: Generated<'CHURCH'>;
   created_by: string;
   created_at: ServerTimestamp;

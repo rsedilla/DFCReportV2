@@ -23,6 +23,7 @@ import {
   setApprovesCells,
   setMovesPeople,
   setCoordinatesLifeClass,
+  setCoordinatesSol1,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
@@ -123,9 +124,13 @@ export function PersonAccount({
         current.approves_cells ? 'Approves Cells' : null,
         current.moves_people ? 'Moves people' : null,
         current.coordinates_life_class && !leaderAccountsOnly ? 'Life Class Coordinator' : null,
+        current.coordinates_sol_1 && !leaderAccountsOnly ? 'SOL 1 Coordinator' : null,
       ].filter((tick): tick is string => tick !== null)
     : [];
-  const heldByTheAdmin = otherTicks.length > 0 || (leaderAccountsOnly && current?.coordinates_life_class === true);
+  const heldByTheAdmin =
+    otherTicks.length > 0 ||
+    (leaderAccountsOnly &&
+      (current?.coordinates_life_class === true || current?.coordinates_sol_1 === true));
 
   // Side by side only where the page itself widens (decision 0462).
   return (
@@ -358,6 +363,19 @@ export function PersonAccount({
                       shown
                         ? `${firstName} opens the church's Life Class classes and names their Teachers, under Classes.`
                         : `${firstName} does not coordinate Life Class.`
+                    }
+                  />
+                  {/* One tick per level, and a level may have several Coordinators (decision 0514). */}
+                  <LeaderTickRow
+                    personId={personId}
+                    field="coordinates_sol_1"
+                    label="SOL 1 Coordinator"
+                    value={current.coordinates_sol_1 === true}
+                    save={(next) => setCoordinatesSol1(current.id, next, crypto.randomUUID())}
+                    describe={(shown) =>
+                      shown
+                        ? `${firstName} opens the church's SOL 1 classes and names their Teachers, under Classes.`
+                        : `${firstName} does not coordinate SOL 1.`
                     }
                   />
                 </>
@@ -718,7 +736,7 @@ function LeaderTickRow({
   locked,
 }: {
   personId: string;
-  field: 'full_view' | 'approves_cells' | 'moves_people' | 'coordinates_life_class';
+  field: 'full_view' | 'approves_cells' | 'moves_people' | 'coordinates_life_class' | 'coordinates_sol_1';
   label: string;
   value: boolean;
   save: (next: boolean) => Promise<Record<string, unknown>>;

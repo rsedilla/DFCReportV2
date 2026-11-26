@@ -64,7 +64,7 @@ export function pageIsOffered(me: SessionDescription, pathname: string): boolean
     return mayHoldAClass(me);
   }
   // The Coordinator's Classes opens for a holder of `equipping.coordinate` at Whole Church: the
-  // Admin, and a Full view Leader ticked Life Class Coordinator (decision 0501).
+  // Admin, and a Full view Leader ticked a level's Coordinator (decisions 0501 and 0514).
   if (at(/^\/equipping\/classes(\/|$)/)) {
     return holdsWholeChurch(me, 'equipping.coordinate');
   }

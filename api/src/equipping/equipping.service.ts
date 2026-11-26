@@ -12,6 +12,7 @@ import {
   ApiErrorCode,
   InvariantViolationError,
   NotFoundError,
+  ScopeDeniedError,
   ValidationFailedError,
 } from '../common/errors/api-error';
 import {
@@ -28,9 +29,11 @@ import { DATABASE, type Db } from '../database/database.module';
 import { lockPersonsWithin } from '../database/person-lock';
 import { HierarchyService } from '../hierarchy/hierarchy.service';
 import { PeopleReadService } from '../people/people.read.service';
+import { ConquestService } from '../conquest/conquest.service';
 import { SuynlService } from '../suynl/suynl.service';
 import { EncounterSeasonsService } from '../training/encounter-seasons.service';
 import { TrainingService } from '../training/training.service';
+import { EQUIPPING_LEVELS } from './dto/equipping.dto';
 import { expectedOn } from './equipping-attendance.service';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
@@ -107,6 +110,25 @@ function decodeCursor(cursor: string | undefined): { at: string; id: string } | 
   });
 }
 
+/** Each level's name in words, for a refusal or a line on a screen. */
+export const LEVEL_NAMES: Record<EquippingLevel, string> = {
+  LIFE_CLASS: 'Life Class',
+  SOL_1: 'SOL 1',
+};
+
+/**
+ * How many Guides a SOL class needs for this many students of one sex (decision 0501, point 8):
+ * up to 5 a Guide, as few Guides as possible.
+ */
+export function solGuidesFor(students: number): number {
+  return students <= 0 ? 0 : Math.ceil(students / 5);
+}
+
+/** How many Guides a class of this level needs for this many students of one sex. */
+export function guidesFor(level: EquippingLevel, students: number): number {
+  return level === 'LIFE_CLASS' ? lifeClassGuidesFor(students) : solGuidesFor(students);
+}
+
 /**
  * How many Guides a Life Class needs for this many students of one sex (decision 0501, point 8):
  * the students divided by 3, the remainder dropped, at least one; the owner gave 1 or 2 students
@@ -176,14 +198,100 @@ export class EquippingService {
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
     private readonly authorization: AuthorizationService,
+    private readonly conquest: ConquestService,
   ) {}
+
+  // ---------------------------------------------------------------------------
+  // The level a Coordinator coordinates (decision 0514)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * **A Coordinator acts on their own levels only** (decision 0501, point 1; decision 0514): the
+   * level is carried on the tick, so a route naming a level refuses one the actor does not
+   * coordinate. The Admin coordinates every level.
+   */
+  async assertCoordinatesLevel(actor: Actor, level: EquippingLevel): Promise<void> {
+    const levels = await this.authorization.coordinatedLevels(actor.accountId);
+    if (levels !== 'ALL' && !levels.has(level)) {
+      throw new ScopeDeniedError(`You do not coordinate ${LEVEL_NAMES[level]}.`, {
+        field: 'level',
+      });
+    }
+  }
+
+  /** The levels the actor coordinates, in the school's order: every level for the Admin. */
+  async coordinatedLevelsOf(actor: Actor): Promise<EquippingLevel[]> {
+    const levels = await this.authorization.coordinatedLevels(actor.accountId);
+    return EQUIPPING_LEVELS.filter((level) => levels === 'ALL' || levels.has(level));
+  }
+
+  /**
+   * A class of a level the actor does not coordinate does not exist to them: answered `NOT_FOUND`,
+   * as a class that does not exist is, so the refusal says nothing about another level's classes.
+   */
+  async assertCoordinatesClass(actor: Actor, classId: string): Promise<void> {
+    const levels = await this.authorization.coordinatedLevels(actor.accountId);
+    if (levels === 'ALL') {
+      return;
+    }
+    const cls = await this.db
+      .selectFrom('equipping_classes')
+      .select('level')
+      .where('id', '=', classId)
+      .executeTakeFirst();
+    if (cls === undefined || !levels.has(cls.level)) {
+      throw new NotFoundError('No such class.');
+    }
+  }
+
+  /** The same, for a route naming an enrollment: the level of its class. */
+  async assertCoordinatesEnrollment(actor: Actor, enrollmentId: string): Promise<void> {
+    const levels = await this.authorization.coordinatedLevels(actor.accountId);
+    if (levels === 'ALL') {
+      return;
+    }
+    const row = await this.db
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
+      .select('c.level')
+      .where('e.id', '=', enrollmentId)
+      .executeTakeFirst();
+    if (row === undefined || !levels.has(row.level)) {
+      throw new NotFoundError('No such enrollment.');
+    }
+  }
+
+  /**
+   * The level's other Coordinators, by name, for the subtitle of the Coordinator's *Classes*
+   * (decision 0514): "Life Class, which you coordinate with Teofilo Ramos."
+   */
+  async otherCoordinatorsOf(actor: Actor, level: EquippingLevel): Promise<string[]> {
+    const ids = (await this.authorization.coordinatorsOf(level)).filter(
+      (id) => canonicalId(id) !== canonicalId(actor.personId),
+    );
+    const people = await this.people.forDecisions(ids);
+    return ids
+      .map((id) => people.get(id)?.fullName ?? null)
+      .filter((name): name is string => name !== null)
+      .sort((a, b) => a.localeCompare(b));
+  }
 
   // ---------------------------------------------------------------------------
   // Reads
   // ---------------------------------------------------------------------------
 
-  /** The four record requirements for each person (point 6), read as things stand now. */
-  async requirementsOf(personIds: readonly string[]): Promise<Map<string, RequirementCheck[]>> {
+  /**
+   * The record requirements for each person at a level, read as things stand now: Life Class's
+   * four (decision 0499, point 6), or SOL 1's two read from the records (decision 0514), its
+   * third, the manual, being the Registrar's tick on the form.
+   */
+  async requirementsOf(
+    personIds: readonly string[],
+    level: EquippingLevel = 'LIFE_CLASS',
+  ): Promise<Map<string, RequirementCheck[]>> {
+    if (level === 'SOL_1') {
+      return this.sol1RequirementsOf(personIds);
+    }
     const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
     const [leaders, leaderNames, standing, lessons] = await Promise.all([
       this.hierarchy.directLeaderIdsOf(ids),
@@ -239,23 +347,98 @@ export class EquippingService {
   }
 
   /**
+   * **SOL 1's two record requirements** (decision 0501, point 18; decision 0514): Life Class
+   * passed, by a posted grade of the school or a pass recorded before it (point 19), and Win 3
+   * as Conquest derives it (section 27) **or three direct disciples now** (owner ruling of
+   * 2026-11-25, decision 0514 point 5), counted on open pastoral assignments, which an archive or
+   * a merge ends. Read once, at registration, and never again in the term.
+   */
+  private async sol1RequirementsOf(
+    personIds: readonly string[],
+  ): Promise<Map<string, RequirementCheck[]>> {
+    const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
+    const [passed, wins, disciples, posted] = await Promise.all([
+      this.training.holdersOfAny(ids, ['LIFE_CLASS']),
+      this.conquest.win3Of(ids),
+      this.hierarchy.discipleCountsOf(this.db, ids),
+      ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            // The grade as it stands, a change after posting included (decision 0513).
+            .selectFrom('equipping_current_grades as g')
+            .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+            .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
+            .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
+            .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
+            .select(['r.person_id', 'c.name', 'r.term_year', 'r.term_number'])
+            .where('g.grade', '=', 'PASSED')
+            .where('r.level', '=', 'LIFE_CLASS')
+            .where('r.person_id', 'in', ids)
+            .orderBy('p.posted_at')
+            .execute(),
+    ]);
+    const passedIn = new Map(
+      posted.map((row) => [
+        canonicalId(row.person_id),
+        `Passed ${row.name}, Term ${row.term_number}, ${row.term_year}`,
+      ]),
+    );
+    return new Map(
+      ids.map((id) => {
+        const win = wins.get(id)?.reached ?? false;
+        const threeDisciples = (disciples.get(id) ?? 0) >= 3;
+        return [
+          id,
+          [
+            {
+              code: 'LIFE_CLASS_PASSED' as const,
+              met: passed.has(id),
+              detail: passed.has(id)
+                ? (passedIn.get(id) ?? 'Life Class passed')
+                : 'Life Class not passed yet',
+            },
+            {
+              code: 'WIN_3' as const,
+              // Either way meets it, and neither count is shown (owner rulings of 2026-11-25,
+              // decision 0514 point 5).
+              met: win || threeDisciples,
+              detail: win
+                ? 'Win 3 reached'
+                : threeDisciples
+                  ? '3 disciples under them in DREAMS'
+                  : 'needs Win 3, or 3 disciples under them in DREAMS',
+            },
+          ],
+        ];
+      }),
+    );
+  }
+
+  /**
    * One person as the registration form shows them: who they are, their leader and Cell, their
    * birthday, and the four record requirements.
    */
-  async candidate(personId: string): Promise<Record<string, unknown>> {
+  async candidate(
+    personId: string,
+    level: EquippingLevel = 'LIFE_CLASS',
+  ): Promise<Record<string, unknown>> {
     const person = await this.people.forDecision(personId);
     if (!person || person.mergedIntoId !== null || (await this.isEquippingRecord(personId))) {
       throw new NotFoundError('No such person.');
     }
     const id = canonicalId(person.id);
     const [checks, cells, births, leaderNames, tries] = await Promise.all([
-      this.requirementsOf([id]),
+      this.requirementsOf([id], level),
       this.cells.currentCellsOfMany([id]),
       this.people.birthDatesOf([id]),
       this.people.directLeaderNamesOf([id]),
-      this.earlierTriesOf([id], 'LIFE_CLASS'),
+      this.earlierTriesOf([id], level),
     ]);
-    const joins = (await this.lesson6SourcesOf(this.db, [id], 'LIFE_CLASS', null)).get(id) ?? null;
+    // Joining a later class at Lesson 6 is Life Class's alone (decision 0512).
+    const joins =
+      level === 'LIFE_CLASS'
+        ? ((await this.lesson6SourcesOf(this.db, [id], 'LIFE_CLASS', null)).get(id) ?? null)
+        : null;
     const membership = cells.get(id)?.membership ?? null;
     const cellLeader =
       membership?.leaderId != null
@@ -304,6 +487,7 @@ export class EquippingService {
     term: string,
     limit: number,
     who: boolean | 'teachers' | 'guides' = false,
+    level: EquippingLevel = 'LIFE_CLASS',
   ): Promise<Record<string, unknown>[]> {
     // A Registrar record is never somebody signed up for a class, for the Admin too (decision
     // 0499, point 13); `candidate` and `register` refuse it the same way.
@@ -311,7 +495,7 @@ export class EquippingService {
       who === true || who === 'teachers'
         ? await this.mayTeachWithin(this.db, null)
         : who === 'guides'
-          ? await this.mayGuideWithin(this.db, null, 'LIFE_CLASS')
+          ? await this.mayGuideWithin(this.db, null, level)
           : null;
     const { rows } = await this.people.searchByName(term, limit, null, restrictTo, {
       currentOnly: true,
@@ -325,9 +509,12 @@ export class EquippingService {
     const passed =
       who === 'guides'
         ? await Promise.all(
-            (['SOL_3', 'SOL_2', 'SOL_1'] as const).map(async (level) => ({
-              level,
-              holders: await this.training.holdersOfAny(ids, [level]),
+            (level === 'LIFE_CLASS'
+              ? (['SOL_3', 'SOL_2', 'SOL_1'] as const)
+              : (['SOL_3', 'SOL_2'] as const)
+            ).map(async (passed) => ({
+              level: passed,
+              holders: await this.training.holdersOfAny(ids, [passed]),
             })),
           )
         : [];
@@ -343,6 +530,30 @@ export class EquippingService {
           : {}),
       };
     });
+  }
+
+  /**
+   * How many are registered for each level in a term, a cancelled registration left out, for the
+   * counts on the Level picker (decision 0514): *Life Class · 14*, *SOL 1 · 2*.
+   */
+  async registrationCounts(term: {
+    term_year: number;
+    term_number: number;
+  }): Promise<Record<EquippingLevel, number>> {
+    const rows = await this.db
+      .selectFrom('equipping_registrations')
+      .select(['level', sql<number>`count(*)::int`.as('n')])
+      .where('term_year', '=', term.term_year)
+      .where('term_number', '=', term.term_number)
+      .where('cancelled_at', 'is', null)
+      .groupBy('level')
+      .execute();
+    return Object.fromEntries(
+      EQUIPPING_LEVELS.map((level) => [
+        level,
+        Number(rows.find((row) => row.level === level)?.n ?? 0),
+      ]),
+    ) as Record<EquippingLevel, number>;
   }
 
   /** A term's registrations, newest first, a page at a time (section 22). */
@@ -435,6 +646,7 @@ export class EquippingService {
       .select((eb) => [
         'c.id',
         'c.name',
+        'c.level',
         'c.day_of_week',
         'c.time_of_day',
         'c.place',
@@ -491,17 +703,25 @@ export class EquippingService {
    * point 22): each with its Teacher, or none yet, how many are enrolled, and whether it has
    * started. Guides and attendance join it with the steps that build them.
    */
-  async coordinatorClasses(query: EquippingTermDto): Promise<Record<string, unknown>> {
+  async coordinatorClasses(
+    query: EquippingTermDto,
+    actor: Actor,
+  ): Promise<Record<string, unknown>> {
     const rows = await this.classRows(query, true);
     const shaped = await this.withTeachers(rows);
     const live = rows.filter((row) => row.cancelled_at === null);
     const today = await this.manilaToday();
     const staffing = await this.staffingOf(live.map((row) => row.id));
     // The lessons late, said in words on the Coordinator's *Attendance* (decision 0501, point 22).
+    // Life Class's alone: SOL 1's register is not built yet, so it owes no lesson (decision 0514).
     const problems = await this.attendance.lessonProblemsOf(
-      live.map((row) => ({ id: row.id, first_lesson_on: String(row.first_lesson_on) })),
+      live
+        .filter((row) => row.level === 'LIFE_CLASS')
+        .map((row) => ({ id: row.id, first_lesson_on: String(row.first_lesson_on) })),
     );
     return {
+      // The level's other Coordinators, for the subtitle (decision 0514).
+      other_coordinators: await this.otherCoordinatorsOf(actor, query.level),
       data: rows.map((row, index) => {
         const base = {
           ...shaped[index],
@@ -749,8 +969,9 @@ export class EquippingService {
             ? null
             : { id: cls.teacher_person_id, full_name: nameOf(cls.teacher_person_id) },
         encounter_weekends: eligibility.weekends,
-        // Whether it takes a student at Lesson 6, and on which day that lesson is expected.
-        lesson_6: lesson6,
+        // Whether it takes a student at Lesson 6, and on which day that lesson is expected: Life
+        // Class's alone (decision 0512); a SOL 1 class has none (decision 0514).
+        lesson_6: cls.level === 'LIFE_CLASS' ? lesson6 : null,
       },
       enrolled: enrolled
         .map((row) => ({
@@ -794,12 +1015,15 @@ export class EquippingService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     // Two ticks since the owner withdrew the devotion tick on 2026-11-18 (decision 0499, point 6).
-    for (const field of ['bible_confirmed', 'manual_confirmed'] as const) {
-      if (body[field] !== true) {
-        throw new ValidationFailedError(
-          'A physical Bible and the Life Class Manual are each ticked before registering.',
-          { field },
-        );
+    // SOL 1 has no Bible tick, and its manual warns rather than refuses (decision 0514).
+    if (body.level === 'LIFE_CLASS') {
+      for (const field of ['bible_confirmed', 'manual_confirmed'] as const) {
+        if (body[field] !== true) {
+          throw new ValidationFailedError(
+            'A physical Bible and the Life Class Manual are each ticked before registering.',
+            { field },
+          );
+        }
       }
     }
 
@@ -814,8 +1038,13 @@ export class EquippingService {
     }
     const personId = canonicalId(person.id);
 
-    const checks = (await this.requirementsOf([personId])).get(personId) ?? [];
-    const unmet = checks.filter((check) => !check.met).map((check) => check.code);
+    const checks = (await this.requirementsOf([personId], body.level)).get(personId) ?? [];
+    const unmet: EquippingRequirement[] = checks
+      .filter((check) => !check.met)
+      .map((check) => check.code);
+    if (body.level === 'SOL_1' && !body.manual_confirmed) {
+      unmet.push('SOL_1_MANUAL');
+    }
     const reason = body.exception_reason?.trim() || null;
     if (unmet.length > 0 && reason === null) {
       throw new ValidationFailedError(
@@ -852,8 +1081,8 @@ export class EquippingService {
           level: body.level,
           term_year: body.term_year,
           term_number: body.term_number,
-          bible_confirmed: true,
-          manual_confirmed: true,
+          bible_confirmed: body.level === 'LIFE_CLASS',
+          manual_confirmed: body.level === 'LIFE_CLASS' || body.manual_confirmed,
           unmet,
           // A reason is kept only where something was unmet; the row says nothing else.
           exception_reason: unmet.length > 0 ? reason : null,
@@ -965,11 +1194,19 @@ export class EquippingService {
     body: OpenClassDto,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
+    await this.assertCoordinatesLevel(actor, body.level);
     const teacher =
       body.teacher_person_id === undefined ? null : await this.teacherOf(body.teacher_person_id);
-    const seasons = await this.seasons.allSeasons();
-    if (!seasons.some((season) => season.id === body.encounter_season_id)) {
-      throw new NotFoundError('No such Encounter season.');
+    // Life Class names its Encounter weekend; SOL has no Encounter (decision 0514).
+    if (body.level === 'LIFE_CLASS') {
+      const seasons = await this.seasons.allSeasons();
+      if (!seasons.some((season) => season.id === body.encounter_season_id)) {
+        throw new NotFoundError('No such Encounter season.');
+      }
+    } else if (body.encounter_season_id !== undefined) {
+      throw new ValidationFailedError(`${LEVEL_NAMES[body.level]} has no Encounter weekend.`, {
+        field: 'encounter_season_id',
+      });
     }
 
     return this.write(async (trx) => {
@@ -988,7 +1225,7 @@ export class EquippingService {
           place: body.place?.trim() || null,
           first_lesson_on: body.first_lesson_on,
           teacher_person_id: teacher === null ? null : canonicalId(teacher.id),
-          encounter_season_id: body.encounter_season_id,
+          encounter_season_id: body.level === 'LIFE_CLASS' ? body.encounter_season_id! : null,
           created_by: actor.accountId,
         })
         .returningAll()
@@ -1352,7 +1589,9 @@ export class EquippingService {
       const may = await this.mayGuideWithin(trx, [id], cls.level);
       if (!may.has(id)) {
         throw new InvariantViolationError(
-          'A Life Class Guide has passed SOL 1 and is in the tree (SKILL.md section 29).',
+          cls.level === 'LIFE_CLASS'
+            ? 'A Life Class Guide has passed SOL 1 and is in the tree (SKILL.md section 29).'
+            : 'A SOL 1 Guide has passed SOL 2 and is in the tree (SKILL.md section 29).',
           { field: 'person_id' },
         );
       }
@@ -1554,7 +1793,11 @@ export class EquippingService {
     among: readonly string[] | null,
     level: EquippingLevel,
   ): Promise<Set<string>> {
-    const programs = level === 'LIFE_CLASS' ? (['SOL_1', 'SOL_2', 'SOL_3'] as const) : [];
+    // One level ahead (decision 0501, point 4): SOL 1 passed guides Life Class, SOL 2 SOL 1.
+    const programs =
+      level === 'LIFE_CLASS'
+        ? (['SOL_1', 'SOL_2', 'SOL_3'] as const)
+        : (['SOL_2', 'SOL_3'] as const);
     const passed = await this.training.holdersOfAny(among, programs);
     const inTree = await this.hierarchy.withOpenAssignment([...passed], executor);
     const records = await this.people.equippingAccountPersons();
@@ -1724,7 +1967,12 @@ export class EquippingService {
     if (classIds.length === 0) {
       return result;
     }
-    const [guides, enrolled] = await Promise.all([
+    const [levels, guides, enrolled] = await Promise.all([
+      this.db
+        .selectFrom('equipping_classes')
+        .select(['id', 'level'])
+        .where('id', 'in', [...classIds])
+        .execute(),
       this.db
         .selectFrom('equipping_class_guides')
         .select(['class_id', 'person_id'])
@@ -1749,14 +1997,17 @@ export class EquippingService {
       ),
     ]);
     const sexOf = (id: string) => sexes.get(canonicalId(id));
+    const levelOf = new Map(levels.map((row) => [row.id, row.level]));
     for (const classId of classIds) {
       const ours = guides.filter((g) => g.class_id === classId);
       const students = enrolled.filter((e) => e.class_id === classId);
       const shortFor = (sex: string) =>
         Math.max(
           0,
-          lifeClassGuidesFor(students.filter((e) => sexOf(e.person_id) === sex).length) -
-            ours.filter((g) => sexOf(g.person_id) === sex && !archived.has(g.person_id)).length,
+          guidesFor(
+            levelOf.get(classId) ?? 'LIFE_CLASS',
+            students.filter((e) => sexOf(e.person_id) === sex).length,
+          ) - ours.filter((g) => sexOf(g.person_id) === sex && !archived.has(g.person_id)).length,
         );
       result.set(classId, {
         named: ours.length,
@@ -2078,11 +2329,12 @@ export class EquippingService {
   /**
    * The two checks enrolling makes (point 11), for each person against a season: a birthday
    * recorded, and 14 on the first day of their own Network's Encounter weekend. `blocked` is
-   * the reason in words, or null.
+   * the reason in words, or null. **A SOL 1 class has no season, and neither check** (decision
+   * 0514): SOL has no Encounter, so a birthday not recorded stops nobody enrolling in it.
    */
   private async eligibilityOf(
     personIds: readonly string[],
-    seasonId: string,
+    seasonId: string | null,
   ): Promise<{
     weekends: { mens: string | null; womens: string | null };
     byPerson: Map<string, { birthDate: string | null; age: number | null; blocked: string | null }>;
@@ -2119,13 +2371,15 @@ export class EquippingService {
           ? 'merged into another record'
           : decision.isArchived
             ? 'archived'
-            : birthDate === null
-              ? 'no birthday recorded'
-              : weekend === null
-                ? 'no Network, so no Encounter weekend'
-                : age! < ENCOUNTER_MINIMUM_AGE
-                  ? `${age} on ${weekend}, under ${ENCOUNTER_MINIMUM_AGE} for the Encounter`
-                  : null;
+            : seasonId === null
+              ? null
+              : birthDate === null
+                ? 'no birthday recorded'
+                : weekend === null
+                  ? 'no Network, so no Encounter weekend'
+                  : age! < ENCOUNTER_MINIMUM_AGE
+                    ? `${age} on ${weekend}, under ${ENCOUNTER_MINIMUM_AGE} for the Encounter`
+                    : null;
       byPerson.set(id, { birthDate, age, blocked });
     }
     return { weekends, byPerson };
@@ -2324,7 +2578,7 @@ export class EquippingService {
     time_of_day: string;
     place: string | null;
     first_lesson_on: unknown;
-    encounter_season_id: string;
+    encounter_season_id: string | null;
     run_by: string;
   }): Record<string, unknown> {
     return {
@@ -2349,7 +2603,7 @@ export class EquippingService {
     level: EquippingLevel;
     term_year: number;
     term_number: number;
-    encounter_season_id: string;
+    encounter_season_id: string | null;
   }> {
     // Locked as a lesson save and a posting lock it, so a class is not posted under an
     // enrollment changing (decision 0508).

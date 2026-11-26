@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useState } from 'react';
 
-import { EquippingFrame, TermPicker } from '@/components/equipping-frame';
+import { EquippingFrame, LevelPicker, TermPicker } from '@/components/equipping-frame';
 import { Button, buttonClasses } from '@/components/ui/button';
 import { SearchResults } from '@/components/search-results';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
@@ -17,6 +17,8 @@ import { TextLink } from '@/components/ui/text-link';
 import { timeLabel } from '@/lib/cells';
 import {
   DAY_NAMES,
+  LEVEL_LABELS,
+  listCoordinatorLevels,
   cancelClass,
   correctClass,
   currentTerm,
@@ -36,6 +38,7 @@ import {
   type ClassGuide,
   type ClassStudent,
   type CoordinatedClass,
+  type EquippingLevel,
   type FoundPerson,
   type Term,
 } from '@/lib/equipping';
@@ -75,18 +78,34 @@ export default function ClassesPage() {
   const [viewing, setViewing] = useState<CoordinatedClass | null>(null);
   const [cancelling, setCancelling] = useState<CoordinatedClass | null>(null);
 
-  const classes = useQuery({
-    queryKey: ['equipping', 'coordinate', 'classes', term],
-    queryFn: ({ signal }) => listCoordinatedClasses(term, signal),
+  // The levels the reader coordinates (decision 0514): a picker only when there is more than one.
+  const levels = useQuery({
+    queryKey: ['equipping', 'coordinate', 'levels'],
+    queryFn: ({ signal }) => listCoordinatorLevels(signal),
   });
+  const mine = levels.data?.data ?? [];
+  const level: EquippingLevel = mine.includes(term.level) ? term.level : (mine[0] ?? term.level);
+  const shownTerm = { ...term, level };
+  const classes = useQuery({
+    queryKey: ['equipping', 'coordinate', 'classes', shownTerm],
+    queryFn: ({ signal }) => listCoordinatedClasses(shownTerm, signal),
+    enabled: levels.isSuccess,
+  });
+  const others = classes.data?.other_coordinators ?? [];
+  // SOL 1's register and grades come with later steps (decision 0514).
+  const life = level === 'LIFE_CLASS';
+  const lead =
+    others.length > 0
+      ? `${LEVEL_LABELS[level]}, which you coordinate with ${others.join(' and ')}.`
+      : `${LEVEL_LABELS[level]}, which you coordinate.`;
   const shown = (classes.data?.data ?? []).filter((each) => listedUnder(status, each));
   // The open dialog reads the class as last listed, so a correction shows at once.
   const editingNow = (editing && classes.data?.data.find((each) => each.id === editing.id)) ?? editing;
 
   return (
-    <EquippingFrame current="/equipping/classes" title="Classes" lead="Life Class, which you coordinate.">
+    <EquippingFrame current="/equipping/classes" title="Classes" lead={lead}>
       <div className={CONTROL_BAR}>
-        <TermPicker term={term} onChange={setTerm} />
+        <TermPicker term={shownTerm} onChange={setTerm} />
         <SelectField
           label="Status"
           value={status}
@@ -97,17 +116,32 @@ export default function ClassesPage() {
           <option value="RUNNING">Running</option>
           <option value="CANCELLED">Cancelled</option>
         </SelectField>
+        {mine.length > 1 ? (
+          <LevelPicker
+            levels={mine}
+            value={level}
+            onChange={(next) => setTerm({ ...shownTerm, level: next })}
+          />
+        ) : null}
         <div className="lg:ml-auto">
           <Button type="button" onClick={() => setOpening(true)}>
             Open a class
           </Button>
         </div>
       </div>
-      <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
+      <FailureNotice
+        failure={
+          levels.isError
+            ? describeFailure(levels.error)
+            : classes.isError
+              ? describeFailure(classes.error)
+              : null
+        }
+      />
       {classes.data && shown.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
           {!classes.data.data.some((each) => listedUnder('ALL', each)) && status === 'ALL'
-            ? `No Life Class is open in ${termLabel(term)} yet.`
+            ? `No ${LEVEL_LABELS[level]} class is open in ${termLabel(term)} yet.`
             : 'No class has that status.'}
         </p>
       ) : null}
@@ -146,7 +180,7 @@ export default function ClassesPage() {
                     </p>
                     <p className="text-sm">
                       <span className="text-muted">Attendance </span>
-                      <AttendanceLine each={each} />
+                      {life ? <AttendanceLine each={each} /> : <span className="text-muted">Not recorded here yet</span>}
                     </p>
                     <div className="mt-3 grid grid-cols-3 gap-2">
                       <Button type="button" variant="secondary" onClick={() => setEditing(each)}>
@@ -155,14 +189,14 @@ export default function ClassesPage() {
                       <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
                         Students
                       </Button>
-                      <GradesLink each={each} />
+                      {life ? <GradesLink each={each} /> : null}
                     </div>
                   </>
                 )}
               </li>
             ))}
           </ul>
-          <Table caption={`Life Class classes, ${termLabel(term)}`} className="mt-4 hidden lg:block">
+          <Table caption={`${LEVEL_LABELS[level]} classes, ${termLabel(term)}`} className="mt-4 hidden lg:block">
             <thead>
               <tr>
                 <HeaderCell>Class</HeaderCell>
@@ -193,7 +227,7 @@ export default function ClassesPage() {
                     </td>
                     <td className="px-3 py-3">{each.enrolled}</td>
                     <td className="px-3 py-3">
-                      <AttendanceLine each={each} />
+                      {life ? <AttendanceLine each={each} /> : <span className="text-muted">Not recorded here yet</span>}
                     </td>
                     <td className="px-3 py-3">{STATUS_LABELS[each.status]}</td>
                     <td className="px-3 py-1">
@@ -206,7 +240,7 @@ export default function ClassesPage() {
                         <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
                           Students
                         </Button>
-                        <GradesLink each={each} />
+                        {life ? <GradesLink each={each} /> : null}
                       </div>
                     </td>
                   </tr>
@@ -216,8 +250,9 @@ export default function ClassesPage() {
           </Table>
         </>
       ) : null}
-      <OpenClassDialog term={term} open={opening} onClose={() => setOpening(false)} />
+      <OpenClassDialog term={shownTerm} open={opening} onClose={() => setOpening(false)} />
       <TeacherDialog
+        level={level}
         cls={editingNow}
         onClose={() => setEditing(null)}
         onCancelClass={(each) => {
@@ -396,8 +431,9 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
   const seasons = useQuery({
     queryKey: ['equipping', 'coordinate', 'seasons'],
     queryFn: ({ signal }) => listCoordinatorSeasons(signal),
-    enabled: open,
+    enabled: open && term.level === 'LIFE_CLASS',
   });
+  const life = term.level === 'LIFE_CLASS';
   const [name, setName] = useState('');
   const [day, setDay] = useState('2');
   const [time, setTime] = useState('19:00');
@@ -425,7 +461,8 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
         ...(place.trim() ? { place: place.trim() } : {}),
         first_lesson_on: firstLesson,
         ...(teacher ? { teacher_person_id: teacher.id } : {}),
-        encounter_season_id: season,
+        // SOL has no Encounter (decision 0514).
+        ...(life ? { encounter_season_id: season } : {}),
       };
       return openClass(body, idempotencyKeyFor('equipping-coordinator-open-class', writeKey, body));
     },
@@ -440,7 +477,7 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
       onClose();
     },
   });
-  const complete = name.trim() !== '' && firstLesson !== '' && season !== '';
+  const complete = name.trim() !== '' && firstLesson !== '' && (!life || season !== '');
   const close = () => {
     setOpenedClash(null);
     onClose();
@@ -473,7 +510,9 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
 
   return (
     <Dialog open={open} onClose={onClose} title="Open a class">
-      <p className="text-muted text-sm">Life Class, {termLabel(term)}. The Teacher may be named now or later.</p>
+      <p className="text-muted text-sm">
+        {LEVEL_LABELS[term.level]}, {termLabel(term)}. The Teacher may be named now or later.
+      </p>
       <form
         className="mt-4 flex flex-col gap-4"
         onSubmit={(event) => {
@@ -511,6 +550,7 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
             <p className="text-muted mt-1 text-sm">Their week is checked when the class is opened.</p>
           </div>
         )}
+        {life ? (
         <SelectField label="Encounter weekend" value={season} onChange={(event) => setSeason(event.target.value)} required>
           <option value="">Choose a season</option>
           {(seasons.data?.data ?? []).map((each) => (
@@ -519,8 +559,11 @@ function OpenClassDialog({ term, open, onClose }: { term: Term; open: boolean; o
             </option>
           ))}
         </SelectField>
+        ) : null}
         {showErrors && !complete ? (
-          <p className="text-field-invalid text-sm">Fill in the name, first lesson and Encounter weekend.</p>
+          <p className="text-field-invalid text-sm">
+            {life ? 'Fill in the name, first lesson and Encounter weekend.' : 'Fill in the name and first lesson.'}
+          </p>
         ) : null}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
         <DialogActions>
@@ -767,10 +810,12 @@ function AccountWarning({
 }
 
 function TeacherDialog({
+  level,
   cls,
   onClose,
   onCancelClass,
 }: {
+  level: EquippingLevel;
   cls: CoordinatedClass | null;
   onClose: () => void;
   onCancelClass: (cls: CoordinatedClass) => void;
@@ -831,7 +876,7 @@ function TeacherDialog({
           </div>
         )}
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
-        {cls ? <GuidesSection classId={cls.id} /> : null}
+        {cls ? <GuidesSection level={level} classId={cls.id} /> : null}
         {cls ? <CancelSection cls={cls} onCancelClass={() => onCancelClass(cls)} /> : null}
         <DialogActions>
           <Button type="button" disabled={chosen === null || save.isPending} onClick={() => save.mutate()}>
@@ -851,7 +896,7 @@ function TeacherDialog({
  * finds only who may guide. Each change is saved at once, and DREAMS shares out the students
  * with no Guide, men to men and women to women, the Guide with the fewest first.
  */
-function GuidesSection({ classId }: { classId: string }) {
+function GuidesSection({ level, classId }: { level: EquippingLevel; classId: string }) {
   const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   // One key per body until a save lands (decision 0127), so a retry replays rather than repeats.
@@ -887,7 +932,7 @@ function GuidesSection({ classId }: { classId: string }) {
       <p className="text-muted text-sm">
         {bySex('MALE')} {bySex('MALE') === 1 ? 'man' : 'men'} and {bySex('FEMALE')}{' '}
         {bySex('FEMALE') === 1 ? 'woman' : 'women'} enrolled. A Guide follows up students of their own sex,
-        3 or 4 each, and DREAMS shares them out.
+        {level === 'LIFE_CLASS' ? ' 3 or 4 each' : ' up to 5 each'}, and DREAMS shares them out.
       </p>
       <ul className="mt-2 flex flex-col">
         {guides.map((g) => (
@@ -907,10 +952,10 @@ function GuidesSection({ classId }: { classId: string }) {
         <div className="mt-2">
           <PersonSearch
             label="Add a Guide"
-            description="Somebody who has passed SOL 1. At least three letters of their name."
+            description={`Somebody who has passed ${level === 'LIFE_CLASS' ? 'SOL 1' : 'SOL 2'}. At least three letters of their name.`}
             empty="Nobody who may guide has that name."
             purpose="add as a Guide"
-            search={searchGuides}
+            search={(term, signal) => searchGuides(term, signal, level)}
             onChoose={(person) => add.mutate(person.id)}
           />
         </div>

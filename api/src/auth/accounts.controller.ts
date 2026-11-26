@@ -24,6 +24,7 @@ import {
   SetFullViewDto,
   SetMovesPeopleDto,
   SetCoordinatesLifeClassDto,
+  SetCoordinatesSol1Dto,
 } from './dto/credentials.dto';
 import { AccountsListDto } from './dto/accounts-list.dto';
 
@@ -162,6 +163,16 @@ export class AccountsController {
       cursor: decodeRosterCursor(query.cursor),
     });
     return { data: rows, next_cursor: encodeRosterCursor(nextCursor) };
+  }
+
+  /**
+   * **Who coordinates each level** (decision 0514): the Coordinators list at the top of the Accounts
+   * tab. Whole Church `roles.manage`, as setting a Coordinator's tick is, so only the Admin reads it.
+   */
+  @Get('coordinators')
+  @RequiresCapability(Capability.RolesManage, { kind: 'church' })
+  async coordinators(): Promise<Record<string, unknown>> {
+    return { data: await this.accountsList.coordinators() };
   }
 
   /** How many accounts each filter of the list holds (decision 0419), guarded as the list is. */
@@ -374,5 +385,22 @@ export class AccountsController {
     return {
       ...(await this.access.setCoordinatesLifeClass(id, body.coordinates_life_class, actor, claim)),
     };
+  }
+
+  /**
+   * Ticks or clears SOL 1 Coordinator on a Leader account (sections 7 and 29, decision 0514),
+   * as the Life Class tick is, and only by the Admin.
+   */
+  @Post(':id/coordinates-sol-1')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.RolesManage, { kind: 'account', from: 'params.id' })
+  async setCoordinatesSol1(
+    @Param('id') id: string,
+    @Body() body: SetCoordinatesSol1Dto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    await this.assertTicksAtWholeChurch(actor);
+    return { ...(await this.access.setCoordinatesSol1(id, body.coordinates_sol_1, actor, claim)) };
   }
 }

@@ -6,8 +6,24 @@ import { authenticatedRequest } from './session';
  * API checks.
  */
 
-export type EquippingLevel = 'LIFE_CLASS';
-export type RequirementCode = 'HAS_LEADER' | 'CELL_REGULAR' | 'DCC_REGULAR' | 'SUYNL_LESSONS_1_TO_4';
+export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1';
+
+/** The levels the school runs, in order (decisions 0499 and 0514). */
+export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
+
+export const LEVEL_LABELS: Record<EquippingLevel, string> = {
+  LIFE_CLASS: 'Life Class',
+  SOL_1: 'SOL 1',
+};
+
+export type RequirementCode =
+  | 'HAS_LEADER'
+  | 'CELL_REGULAR'
+  | 'DCC_REGULAR'
+  | 'SUYNL_LESSONS_1_TO_4'
+  | 'LIFE_CLASS_PASSED'
+  | 'WIN_3'
+  | 'SOL_1_MANUAL';
 export type RegistrationStatus =
   | 'REGISTERED'
   | 'REGISTERED_WITH_EXCEPTION'
@@ -26,6 +42,10 @@ export const REQUIREMENT_LABELS: Record<RequirementCode, string> = {
   CELL_REGULAR: 'Regular in a Cell Group',
   DCC_REGULAR: 'Regular in DCC',
   SUYNL_LESSONS_1_TO_4: 'SUYNL: lessons 1 to 4',
+  // SOL 1's three (decision 0514).
+  LIFE_CLASS_PASSED: 'Life Class passed',
+  WIN_3: 'Win 3, or 3 disciples',
+  SOL_1_MANUAL: 'Has the SOL 1 Manual',
 };
 
 export const STATUS_LABELS: Record<RegistrationStatus, string> = {
@@ -99,7 +119,8 @@ export interface EquippingClass {
   time_of_day: string;
   place: string | null;
   first_lesson_on: string;
-  encounter_season_id: string;
+  /** Null for a SOL 1 class, which has no Encounter (decision 0514). */
+  encounter_season_id: string | null;
   run_by: 'CHURCH';
   /** Null until the Coordinator names one (decision 0501). */
   teacher: { id: string; full_name: string | null } | null;
@@ -149,9 +170,13 @@ export interface CellClash {
 
 export interface ClassDetail {
   class: Omit<EquippingClass, 'enrolled'> & {
+    level: EquippingLevel;
     encounter_weekends: { mens: string | null; womens: string | null };
-    /** Its Lesson 6's day, and whether it still takes a student at Lesson 6 (decision 0512). */
-    lesson_6?: { on: string; open: boolean };
+    /**
+     * Its Lesson 6's day, and whether it still takes a student at Lesson 6 (decision 0512); null
+     * for a SOL 1 class (decision 0514).
+     */
+    lesson_6?: { on: string; open: boolean } | null;
   };
   enrolled: {
     enrollment_id: string;
@@ -186,8 +211,26 @@ export async function searchPeople(q: string, signal?: AbortSignal): Promise<{ d
   });
 }
 
-export async function getCandidate(personId: string, signal?: AbortSignal): Promise<Candidate> {
-  return authenticatedRequest(`/api/v1/equipping/people/${encodeURIComponent(personId)}`, { signal });
+export async function getCandidate(
+  personId: string,
+  level: EquippingLevel,
+  signal?: AbortSignal,
+): Promise<Candidate> {
+  return authenticatedRequest(
+    `/api/v1/equipping/people/${encodeURIComponent(personId)}?level=${level}`,
+    { signal },
+  );
+}
+
+/** How many are registered for each level in a term (decision 0514), for the Level picker. */
+export async function getRegistrationCounts(
+  term: Pick<Term, 'term_year' | 'term_number'>,
+  signal?: AbortSignal,
+): Promise<Record<EquippingLevel, number>> {
+  return authenticatedRequest(
+    `/api/v1/equipping/registrations/counts?term_year=${term.term_year}&term_number=${term.term_number}`,
+    { signal },
+  );
 }
 
 export async function listRegistrations(
@@ -203,7 +246,8 @@ export async function listRegistrations(
 export async function register(
   input: Term & {
     person_id: string;
-    bible_confirmed: boolean;
+    /** Life Class only (decision 0514). */
+    bible_confirmed?: boolean;
     manual_confirmed: boolean;
     exception_reason?: string;
     note?: string;
@@ -244,7 +288,8 @@ export async function openClass(
     place?: string;
     first_lesson_on: string;
     teacher_person_id?: string;
-    encounter_season_id: string;
+    /** Life Class only; a SOL 1 class names no Encounter weekend (decision 0514). */
+    encounter_season_id?: string;
   },
   idempotencyKey: string,
 ): Promise<
@@ -262,10 +307,15 @@ export async function openClass(
 }
 
 /** The Coordinator's *Classes* (decision 0501). */
+/** The levels the reader coordinates, every level for the Admin (decision 0514). */
+export async function listCoordinatorLevels(signal?: AbortSignal): Promise<{ data: EquippingLevel[] }> {
+  return authenticatedRequest('/api/v1/equipping/coordinate/levels', { signal });
+}
+
 export async function listCoordinatedClasses(
   term: Term,
   signal?: AbortSignal,
-): Promise<{ data: CoordinatedClass[] }> {
+): Promise<{ data: CoordinatedClass[]; other_coordinators?: string[] }> {
   return authenticatedRequest(`/api/v1/equipping/coordinate/classes?${termQuery(term)}`, { signal });
 }
 
@@ -286,8 +336,15 @@ export async function listClassStudents(
 }
 
 /** The Coordinator's Guide search: who may guide Life Class, SOL 1 passed and in the tree. */
-export async function searchGuides(term: string, signal?: AbortSignal): Promise<{ data: FoundPerson[] }> {
-  return authenticatedRequest(`/api/v1/equipping/guides?q=${encodeURIComponent(term)}`, { signal });
+export async function searchGuides(
+  term: string,
+  signal?: AbortSignal,
+  level: EquippingLevel = 'LIFE_CLASS',
+): Promise<{ data: FoundPerson[] }> {
+  return authenticatedRequest(
+    `/api/v1/equipping/guides?q=${encodeURIComponent(term)}&level=${level}`,
+    { signal },
+  );
 }
 
 export async function nameGuide(classId: string, personId: string, idempotencyKey: string): Promise<unknown> {

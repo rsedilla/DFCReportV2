@@ -555,6 +555,16 @@ describe('A grade changed after posting (section 29, decision 0513)', () => {
       .where('final_grade_id', '=', carlo.final_grade_id)
       .executeTakeFirstOrThrow();
     expect(tries.grade).toBe('PASSED');
+    // SOL 1's form names the class the grade now stands Passed in (decision 0514).
+    const sol1 = await get(
+      registrar,
+      `equipping/people/${personOf.get('Carlo')}?level=SOL_1`,
+    ).expect(200);
+    expect((sol1.body as { requirements: unknown[] }).requirements[0]).toEqual({
+      code: 'LIFE_CLASS_PASSED',
+      met: true,
+      detail: 'Passed Life Class A, Term 3, 2026',
+    });
   });
 
   it('withdraws the Life Class the school filed when a Passed is changed away', async () => {

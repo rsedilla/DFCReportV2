@@ -16,7 +16,7 @@ import { isGrantMaking } from './grant-making';
 import { MERGED_PERSONS_PORT, type MergedPersonsPort } from './merged-persons.port';
 import {
   LEADER_APPROVES_CELLS,
-  LEADER_COORDINATES_LIFE_CLASS,
+  LEADER_COORDINATES,
   LEADER_FULL_VIEW_ONLY,
   LEADER_MOVES_PEOPLE,
   ROLE_DEFAULTS,
@@ -26,7 +26,12 @@ import { screensFor, type Screens } from './screens';
 import { isNamedSeniorPastor } from './senior-pastors';
 import { grantCoversNothing } from './single-scope';
 
-import type { AccountRole, AccountStatus, NetworkName } from '../../database/schema';
+import type {
+  AccountRole,
+  AccountStatus,
+  EquippingLevel,
+  NetworkName,
+} from '../../database/schema';
 
 export interface Actor {
   accountId: string;
@@ -67,6 +72,8 @@ interface ActiveRoles {
   movesPeople: boolean;
   /** Life Class Coordinator (sections 7 and 29, decision 0501), read on the same row. */
   coordinatesLifeClass: boolean;
+  /** SOL 1 Coordinator (sections 7 and 29, decision 0514), read on the same row. */
+  coordinatesSol1: boolean;
 }
 
 /**
@@ -177,6 +184,7 @@ export class AuthorizationService {
         'accounts.approves_cells',
         'accounts.moves_people',
         'accounts.coordinates_life_class',
+        'accounts.coordinates_sol_1',
       ])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
@@ -188,6 +196,7 @@ export class AuthorizationService {
       approvesCells: rows.some((row) => row.approves_cells),
       movesPeople: rows.some((row) => row.moves_people),
       coordinatesLifeClass: rows.some((row) => row.coordinates_life_class),
+      coordinatesSol1: rows.some((row) => row.coordinates_sol_1),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -617,7 +626,9 @@ export class AuthorizationService {
         ...ROLE_DEFAULTS[role],
         ...(ticked && roles.approvesCells ? LEADER_APPROVES_CELLS : {}),
         ...(ticked && roles.movesPeople ? LEADER_MOVES_PEOPLE : {}),
-        ...(ticked && roles.coordinatesLifeClass ? LEADER_COORDINATES_LIFE_CLASS : {}),
+        ...(ticked && (roles.coordinatesLifeClass || roles.coordinatesSol1)
+          ? LEADER_COORDINATES
+          : {}),
       };
 
       // The ticks add to what the Leader role gives, as Full view withholds from it; none
@@ -846,6 +857,65 @@ export class AuthorizationService {
    */
   async authorityFor(accountId: string): Promise<ActorAuthority> {
     return { accountId, ...(await this.effective(accountId)) };
+  }
+
+  /**
+   * **The school levels an account coordinates** (sections 7 and 29, decision 0514). A level is
+   * carried on its tick: `equipping.coordinate` says the account coordinates some level, and the
+   * ticks say which, so the school refuses a class of a level the account does not tick. An
+   * account holding `ADMIN` keeps every Coordinator step at every level (decision 0501, point 2),
+   * and reads `ALL`; the Registrar's `equipping.manage` coordinates nothing. An explicit grant of
+   * `equipping.coordinate` names no level, so it reaches none; nothing writes one.
+   */
+  async coordinatedLevels(accountId: string): Promise<'ALL' | ReadonlySet<EquippingLevel>> {
+    const authority = await this.authorityFor(accountId);
+    // The Admin's by role: a Registrar holds `equipping.manage` too, and coordinates nothing.
+    if (authority.roles.includes('ADMIN')) {
+      return 'ALL';
+    }
+    if (!holdsWholeChurch(authority, Capability.EquippingCoordinate)) {
+      return new Set();
+    }
+    const roles = await this.activeRoles(this.db, accountId);
+    // The ticks grant only on an honoured Leader row with Full view, as `effective` reads them.
+    if (!roles.honoured.includes('LEADER') || !roles.fullView) {
+      return new Set();
+    }
+    const levels = new Set<EquippingLevel>();
+    if (roles.coordinatesLifeClass) {
+      levels.add('LIFE_CLASS');
+    }
+    if (roles.coordinatesSol1) {
+      levels.add('SOL_1');
+    }
+    return levels;
+  }
+
+  /**
+   * **Who coordinates a level** (decision 0514): the Persons of the accounts ticked for it, with
+   * Full view, a current `LEADER` row and an account that is not disabled. A level may have
+   * several. `auth` owns `accounts`, so the school asks here rather than reading it.
+   */
+  async coordinatorsOf(level: EquippingLevel): Promise<string[]> {
+    const column = level === 'LIFE_CLASS' ? 'coordinates_life_class' : 'coordinates_sol_1';
+    const rows = await this.db
+      .selectFrom('accounts')
+      .select('accounts.person_id')
+      .where(column, '=', true)
+      .where('accounts.full_view', '=', true)
+      .where('accounts.status', '<>', 'DISABLED')
+      .where((eb) =>
+        eb.exists(
+          eb
+            .selectFrom('account_roles')
+            .select('account_roles.id')
+            .whereRef('account_roles.account_id', '=', 'accounts.id')
+            .where('account_roles.role', '=', 'LEADER')
+            .where('account_roles.revoked_at', 'is', null),
+        ),
+      )
+      .execute();
+    return rows.map((row) => row.person_id);
   }
 
   /**

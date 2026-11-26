@@ -1546,7 +1546,7 @@ const SCANS = [
       await mockRegistrationSearch(page);
     },
     async arrange(page: import('@playwright/test').Page) {
-      await page.getByRole('button', { name: 'Register a person' }).click();
+      await page.getByRole('button', { name: 'Register for Life Class' }).click();
       const dialog = page.getByRole('dialog', { name: 'Register for Life Class' });
       await dialog.getByLabel('Person').fill('wil');
       await dialog.getByRole('button', { name: 'Search' }).click();
@@ -2555,11 +2555,12 @@ const TARGET_SWEEP = [
     coordinator: true,
   },
   {
-    // The term, Register a person, and one Cancel for the one row not yet in a class:
-    // **three**. A Registrar's, whose `/auth/me` stays for the entries after it.
+    // The term, Register for Life Class, and one Cancel for the one row not yet in a class:
+    // **three** at least, the Level chips beside them (decision 0514). A Registrar's, whose
+    // `/auth/me` stays for the entries after it.
     name: 'equipping registration',
     route: '/equipping/registration',
-    settle: 'Register a person',
+    settle: 'Register for Life Class',
     minimum: 3,
     registrar: true,
   },
