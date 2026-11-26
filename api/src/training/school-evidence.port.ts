@@ -1,4 +1,4 @@
-import type { Transaction } from 'kysely';
+import type { Kysely, Transaction } from 'kysely';
 
 import type { Database, NetworkName } from '../database/schema';
 
@@ -23,8 +23,20 @@ export interface SchoolEvidencePort {
   evidenceWithin(
     trx: Transaction<Database>,
     personIds: readonly string[],
-    program: 'ENCOUNTER' | 'LIFE_CLASS',
+    program: 'ENCOUNTER' | 'LIFE_CLASS' | 'SOL_1',
   ): Promise<SchoolEvidence[]>;
+  /**
+   * Whether the school runs SOL 1: a Coordinator has opened a SOL 1 class that was not cancelled
+   * (owner, 2026-11-26, "When a class opens"; decision 0514, point 13). From then only the Admin
+   * ticks SOL 1, for somebody who finished before the school.
+   */
+  runsSol1(executor: Kysely<Database> | Transaction<Database>): Promise<boolean>;
+  /**
+   * Holds off a SOL 1 class being opened until this transaction ends, taken by a Training save
+   * that names SOL 1 before it asks `runsSol1`, so a leader's tick never lands after a class
+   * opened (`equipping/sol-1-opening.ts`).
+   */
+  shareSol1OpeningWithin(trx: Transaction<Database>): Promise<void>;
 }
 
 export const SCHOOL_EVIDENCE_PORT = Symbol('SCHOOL_EVIDENCE_PORT');

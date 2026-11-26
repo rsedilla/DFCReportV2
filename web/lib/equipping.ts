@@ -879,8 +879,25 @@ export interface GradeChange {
   enrollment?: EnrollmentEffect | null;
 }
 
+/** A SOL student's five checks beside the grade (decision 0514, point 11). */
+export interface SolChecklist {
+  absences: number;
+  made_up: number;
+  verses: number;
+  devotionals: number;
+  quiz: { items: number | null; scores: number[]; passed: boolean };
+  book: boolean;
+}
+
 export interface ClassGrades {
-  class: { id: string; name: string; day_of_week: number; time_of_day: string; place: string | null };
+  class: {
+    id: string;
+    name: string;
+    level?: EquippingLevel;
+    day_of_week: number;
+    time_of_day: string;
+    place: string | null;
+  };
   status: GradesStatus;
   may_check: boolean;
   checks_as: 'ADMIN' | 'COORDINATOR';
@@ -895,6 +912,8 @@ export interface ClassGrades {
     lessons_kept: number;
     lessons_made_up: number;
     lessons: EncounterSign[];
+    /** SOL's checklist (decision 0514, point 11); absent on Life Class. */
+    checklist?: SolChecklist;
     your_disciple: boolean;
     /** Once posted (decision 0513). */
     final_grade_id?: string;

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { mockCoordinator, mockSignedIn } from './mock-api';
-import { ATTENDANCE_IDS, mockFinalGrades, mockRegistrar } from './mock-equipping';
+import { ATTENDANCE_IDS, mockFinalGrades, mockRegistrar, mockSolFinalGrades } from './mock-equipping';
 
 /**
  * Final grades (SKILL.md section 29, decision 0501, point 16; decision 0508), the owner's version
@@ -66,4 +66,40 @@ test('the Coordinator reads the grades, sees their disciple marked, and checks',
   await page.getByRole('button', { name: 'Mark as checked' }).click();
   await expect.poll(() => sent.length).toBe(1);
   expect(sent[0].url).toMatch(/\/coordinate\/classes\/.*\/check$/);
+});
+
+test('SOL 1 grades show the five checks beside the grade, with no Not yet (decision 0514)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockSignedIn(page);
+  await mockRegistrar(page);
+  await mockFinalGrades(page, 'READY');
+  const { sent } = await mockSolFinalGrades(page);
+  await page.goto('/equipping/final-grades');
+  await page.getByRole('button', { name: /SOL 1/ }).first().click();
+  const table = page.getByRole('table', { name: 'Final grades, SOL 1 A' });
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Student',
+    'Grade',
+    'Why',
+    'Attendance',
+    'Verses',
+    'Devotionals',
+    'Quiz',
+    'Book',
+  ]);
+  const nestor = table.getByRole('row', { name: /Villamor, Nestor/ });
+  await expect(nestor).toContainText('L7 devotional and the book missing.');
+  await expect(nestor).toContainText('10 of 10 · 1 made up');
+  await expect(nestor.getByRole('cell', { name: '9 of 10' })).toHaveClass(/text-field-invalid/);
+  await expect(table.getByRole('row', { name: /Soriano, Ramil/ })).toContainText('4 absences');
+  await expect(table.getByRole('row', { name: /Tolentino, Imelda/ })).toContainText('65% · 3 tries');
+  await expect(page.getByRole('button', { name: /^Not yet/ })).toHaveCount(0);
+  await expect(page.getByText('The lesson by lesson register is on the Teacher’s page.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Post SOL 1 A…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Post SOL 1 A?' });
+  await expect(dialog).toContainText('2 passed · 3 not passed.');
+  await expect(dialog).not.toContainText('Encounter');
+  await dialog.getByRole('button', { name: 'Post grades' }).click();
+  await expect.poll(() => sent.length).toBe(1);
 });

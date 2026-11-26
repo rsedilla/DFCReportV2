@@ -217,6 +217,8 @@ export interface TrainingPage {
   next_cursor: string | null;
   /** Whether the reader may tick the Encounter and Life Class: the Admin alone (decision 0509). */
   school_may_tick: boolean;
+  /** The levels the school files now, SOL 1 once a SOL 1 class has opened (decision 0514). */
+  school_programs?: TrainingProgram[];
 }
 
 /** One change. Withdrawing a graduation, or changing its date, names the row and a reason. */

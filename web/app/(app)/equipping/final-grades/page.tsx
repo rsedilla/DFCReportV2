@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 
-import { EquippingFrame, TermPicker } from '@/components/equipping-frame';
+import { EquippingFrame, LevelPicker, TermPicker } from '@/components/equipping-frame';
 import { GradesPanel, phaseWords } from '@/components/final-grades';
 import { GradeChangeDialog } from '@/components/grade-change-dialog';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,9 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import {
   currentTerm,
+  EQUIPPING_LEVELS,
   getFinalGrades,
+  LEVEL_LABELS,
   listFinalGradeClasses,
   postClassGrades,
   termLabel,
@@ -46,6 +48,8 @@ export default function FinalGradesPage() {
       <div className="flex flex-col gap-6">
         <div className={CONTROL_BAR}>
           <TermPicker term={term} onChange={setTerm} />
+          {/* Each level's classes, as Registration and Enrollment pick them (decision 0514). */}
+          <LevelPicker levels={EQUIPPING_LEVELS} value={term.level} onChange={(level) => setTerm({ ...term, level })} />
           <div className="flex flex-wrap gap-2" role="group" aria-label="Classes">
             {list.map((each) => (
               <Button
@@ -66,7 +70,9 @@ export default function FinalGradesPage() {
         </div>
         <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
         {classes.data && list.length === 0 ? (
-          <p className="text-muted text-sm">No Life Class is open in {termLabel(term)}.</p>
+          <p className="text-muted text-sm">
+            No {LEVEL_LABELS[term.level]} class is open in {termLabel(term)}.
+          </p>
         ) : null}
         {classId ? <ClassView key={classId} classId={classId} /> : null}
       </div>
@@ -126,6 +132,8 @@ function PostButton({ data }: { data: ClassGrades }) {
     },
   });
   const { phase, counts } = data.status;
+  // SOL has no Encounter, so nobody stays enrolled for one (decision 0514).
+  const sol = data.class.level !== undefined && data.class.level !== 'LIFE_CLASS';
   if (phase === 'POSTED') {
     return (
       <p className="text-sm font-semibold">
@@ -151,11 +159,13 @@ function PostButton({ data }: { data: ClassGrades }) {
       </Button>
       <Dialog open={confirming} onClose={() => setConfirming(false)} title={`Post ${data.class.name}?`}>
         <p className="text-sm">
-          {counts.passed} passed · {counts.not_passed} not passed · {counts.not_yet} not yet.
+          {counts.passed} passed · {counts.not_passed} not passed
+          {sol ? '' : ` · ${counts.not_yet} not yet`}.
         </p>
         <p className="text-muted mt-2 text-sm">
-          Posting makes these grades final and ends the term for everyone but those still to attend the
-          Encounter. A change after posting is made by the Admin, with a reason.
+          {sol
+            ? 'Posting makes these grades final and ends the term. A change after posting is made by the Admin, with a reason.'
+            : 'Posting makes these grades final and ends the term for everyone but those still to attend the Encounter. A change after posting is made by the Admin, with a reason.'}
         </p>
         <FailureNotice failure={save.isError ? describeFailure(save.error) : null} />
         <DialogActions>

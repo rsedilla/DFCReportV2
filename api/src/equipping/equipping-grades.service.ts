@@ -32,7 +32,8 @@ import { TrainingService } from '../training/training.service';
 import {
   CLASS_LESSONS,
   EquippingAttendanceService,
-  refuseSolNotBuilt,
+  passesQuiz,
+  SOL_LESSONS,
   type RegisterEntry,
 } from './equipping-attendance.service';
 import { lifeClassFiledOf, type LifeClassFiled } from './life-class-from-school';
@@ -66,11 +67,28 @@ interface StudentGrade {
   signs: Sign[];
 }
 
+/**
+ * A SOL student's checklist beside the grade (decision 0514, point 11): attendance, the verses and
+ * devotionals out of ten, the quiz and the book. Read from the register, the quiz tries and the
+ * book as they stand; a posted class's records can no longer change (decision 0514, point 8), so
+ * once posted they read as posted.
+ */
+export interface SolChecklist {
+  absences: number;
+  made_up: number;
+  verses: number;
+  devotionals: number;
+  quiz: { items: number | null; scores: number[]; passed: boolean };
+  book: boolean;
+}
+
 /** What a posted class's grade carries beside the grade itself (decision 0513). */
 interface PostedFacts {
   register: Map<number, RegisterEntry>;
   encounter: 'CAME' | 'ENROLLED' | 'MISSED' | null;
   posted: { final_grade_id: string; changes: number; passed_later: boolean } | null;
+  /** SOL's checklist (decision 0514, point 11); null on Life Class. */
+  sol: SolChecklist | null;
   /** The graded enrollment's registration, and whether the enrollment is still open. */
   registration_id: string;
   open: boolean;
@@ -130,10 +148,6 @@ export class EquippingGradesService {
 
   /** `GET /equipping/final-grades`: the term's classes, each with where it stands. */
   async classes(query: EquippingTermDto): Promise<Record<string, unknown>> {
-    // SOL 1's final grades are not built yet (decision 0514).
-    if (query.level !== 'LIFE_CLASS') {
-      return { data: [] };
-    }
     const rows = await this.db
       .selectFrom('equipping_classes')
       .select(['id', 'name', 'day_of_week', 'time_of_day'])
@@ -183,7 +197,13 @@ export class EquippingGradesService {
           standing.students.flatMap((s) => (s.posted === null ? [] : [s.posted.final_grade_id])),
         )
       : new Map<string, Record<string, unknown>[]>();
-    const changes = options.history && standing.posting !== null && admin;
+    // A SOL class's posted grades are not changed yet (decision 0514, point 12): its screen comes
+    // after this step.
+    const changes =
+      options.history &&
+      standing.posting !== null &&
+      admin &&
+      standing.class.level === 'LIFE_CLASS';
     const registeredLater = changes
       ? await this.registeredLaterOf(
           this.db,
@@ -209,6 +229,8 @@ export class EquippingGradesService {
           lessons_kept: s.lessons_kept,
           lessons_made_up: s.lessons_made_up,
           lessons: s.signs,
+          // SOL's five checks beside the grade (decision 0514, point 11).
+          ...(s.sol === null ? {} : { checklist: s.sol }),
           your_disciple: mine(s.person_id),
           // The Coordinator's read carries none of it (decision 0513).
           ...(s.posted === null || !options.history
@@ -379,8 +401,9 @@ export class EquippingGradesService {
             },
           });
         }
-        // **A posted Passed files Life Class from the school** (decision 0509), dated the day it
-        // was posted. One who already holds Life Class keeps what they hold.
+        // **A posted Passed files Life Class from the school** (decision 0509), and SOL 1 from a
+        // SOL 1 class (decision 0514, point 13), dated the day it was posted. One who already
+        // holds it keeps what they hold.
         const postedOn = manilaDayOf(posting.posted_at);
         // In person order, as a Training save locks them (section 24).
         const passed = standing.students
@@ -389,7 +412,7 @@ export class EquippingGradesService {
         for (const s of passed) {
           await this.training.fileFromSchoolWithin(trx, {
             personId: s.person_id,
-            program: 'LIFE_CLASS',
+            program: standing.class.level === 'LIFE_CLASS' ? 'LIFE_CLASS' : 'SOL_1',
             graduatedOn: postedOn,
             accountId: actor.accountId,
           });
@@ -679,11 +702,20 @@ export class EquippingGradesService {
     const row = await executor
       .selectFrom('equipping_final_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
-      .select('p.class_id')
+      .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
+      .select(['p.class_id', 'c.level', 'c.name'])
       .where('g.id', '=', finalGradeId)
       .executeTakeFirst();
     if (row === undefined) {
       throw new NotFoundError('No such grade.');
+    }
+    // **A SOL grade is changed after posting by the Admin** (decision 0514, point 12), on a screen
+    // not built yet; until it is, a change reaches Life Class alone.
+    if (row.level !== 'LIFE_CLASS') {
+      throw new InvariantViolationError(
+        `${row.name} is a SOL 1 class, and changing its grades after posting is not built yet.`,
+        { field: 'id' },
+      );
     }
     return row.class_id;
   }
@@ -1101,7 +1133,9 @@ export class EquippingGradesService {
     if (cls === undefined) {
       throw new NotFoundError('No such class.');
     }
-    refuseSolNotBuilt(cls);
+    // SOL grades by its checklist over ten lessons, with no Encounter (decision 0514, point 11).
+    const sol = cls.level !== 'LIFE_CLASS';
+    const lessons: readonly number[] = sol ? SOL_LESSONS : CLASS_LESSONS;
     const posting =
       (await executor
         .selectFrom('equipping_class_postings')
@@ -1114,7 +1148,7 @@ export class EquippingGradesService {
       .where('class_id', '=', classId)
       .execute();
     const savedSet = new Set(saved.map((row) => row.lesson));
-    const notSaved = CLASS_LESSONS.filter((n) => !savedSet.has(n));
+    const notSaved = lessons.filter((n) => !savedSet.has(n));
 
     // A posted grade as it stands now, the latest change of it included (decision 0513).
     const rows = await executor
@@ -1143,10 +1177,19 @@ export class EquippingGradesService {
       )
       .execute();
     const registers = await this.attendance.registersOf(executor, classId, rows);
-    const encounters = await this.attendance.encounterOf(
-      executor,
-      rows.map((row) => row.person_id),
-    );
+    const encounters = sol
+      ? new Map<string, 'CAME' | 'ENROLLED' | 'MISSED' | null>()
+      : await this.attendance.encounterOf(
+          executor,
+          rows.map((row) => row.person_id),
+        );
+    const quizzes = sol
+      ? await this.solQuizAndBookOf(
+          executor,
+          classId,
+          rows.map((row) => row.enrollment_id),
+        )
+      : null;
     // Where each lesson was recorded, a class left this term or a term kept from (decision 0513).
     const entryEnrollments = [
       ...new Set(
@@ -1168,13 +1211,17 @@ export class EquippingGradesService {
     const students: (StudentGrade & PostedFacts)[] = rows.map((row) => {
       const register = registers.get(row.enrollment_id)!;
       const encounter = encounters.get(canonicalId(row.person_id)) ?? null;
-      const worked = gradeOf(register, encounter);
+      const checklist =
+        quizzes === null ? null : solChecklistOf(register, quizzes, row.enrollment_id);
+      const worked =
+        checklist === null ? gradeOf(register, encounter) : solGradeOf(register, checklist);
       return {
         enrollment_id: row.enrollment_id,
         person_id: row.person_id,
         ...worked,
         register,
         encounter,
+        sol: checklist,
         registration_id: canonicalId(row.registration_id),
         open: row.ended_at === null,
         entryRegistrations,
@@ -1202,7 +1249,7 @@ export class EquippingGradesService {
     // enrolled the day it was saved, after the save, has no mark until the Teacher saves it again.
     const unmarked =
       posting === null
-        ? CLASS_LESSONS.filter(
+        ? lessons.filter(
             (n) => savedSet.has(n) && rows.some((row) => !registers.get(row.enrollment_id)!.has(n)),
           )
         : [];
@@ -1230,6 +1277,8 @@ export class EquippingGradesService {
               st.lessons_kept,
               st.lessons_made_up,
               st.signs,
+              // SOL's checklist too, so a check certifies the quiz and book it read (0514).
+              st.sol,
             ]),
         }),
       )
@@ -1238,6 +1287,7 @@ export class EquippingGradesService {
       class: {
         id: cls.id,
         name: cls.name,
+        level: cls.level,
         day_of_week: cls.day_of_week,
         time_of_day: String(cls.time_of_day).slice(0, 5),
         place: cls.place,
@@ -1247,6 +1297,49 @@ export class EquippingGradesService {
       checks,
       fingerprint,
       posting,
+    };
+  }
+
+  /** A SOL class's quiz items, each enrollment's current tries in order, and its book. */
+  private async solQuizAndBookOf(
+    executor: Db | Transaction<Database>,
+    classId: string,
+    enrollmentIds: readonly string[],
+  ): Promise<SolQuizAndBook> {
+    const quiz = await executor
+      .selectFrom('equipping_quizzes')
+      .select('items')
+      .where('class_id', '=', classId)
+      .executeTakeFirst();
+    const ids = [...enrollmentIds];
+    const tries =
+      ids.length === 0
+        ? []
+        : await executor
+            .selectFrom('equipping_quiz_tries')
+            .select(['enrollment_id', 'score'])
+            .where('enrollment_id', 'in', ids)
+            .where('superseded_at', 'is', null)
+            .orderBy('try')
+            .execute();
+    const books =
+      ids.length === 0
+        ? []
+        : await executor
+            .selectFrom('equipping_books')
+            .select(['enrollment_id', 'read'])
+            .where('enrollment_id', 'in', ids)
+            .where('superseded_at', 'is', null)
+            .execute();
+    const scores = new Map<string, number[]>();
+    for (const t of tries) {
+      const key = canonicalId(t.enrollment_id);
+      scores.set(key, [...(scores.get(key) ?? []), t.score]);
+    }
+    return {
+      items: quiz?.items ?? null,
+      scores,
+      read: new Set(books.filter((b) => b.read).map((b) => canonicalId(b.enrollment_id))),
     };
   }
 
@@ -1390,6 +1483,114 @@ function gradeOf(
     };
   }
   return { ...base, grade: 'PASSED', reason: 'Every lesson done.' };
+}
+
+interface SolQuizAndBook {
+  items: number | null;
+  scores: Map<string, number[]>;
+  read: Set<string>;
+}
+
+/** A lesson the student came to or made up. */
+function done(entry: RegisterEntry | undefined): entry is RegisterEntry {
+  return entry !== undefined && (entry.came || entry.madeUpOn !== null);
+}
+
+const verseKept = (entry: RegisterEntry) => entry.verse === true || entry.verseBroughtOn !== null;
+const devotionalKept = (entry: RegisterEntry) =>
+  entry.devotional === true || entry.devotionalBroughtOn !== null;
+
+/** One SOL student's checklist, from their register, quiz tries and book (decision 0514). */
+function solChecklistOf(
+  register: Map<number, RegisterEntry>,
+  quiz: SolQuizAndBook,
+  enrollmentId: string,
+): SolChecklist {
+  const entries = SOL_LESSONS.map((n) => register.get(n));
+  const kept = entries.filter(done);
+  const scores = quiz.scores.get(canonicalId(enrollmentId)) ?? [];
+  const items = quiz.items;
+  return {
+    absences: entries.filter((e) => e !== undefined && !e.came && !e.beforeJoining).length,
+    made_up: entries.filter((e) => e !== undefined && e.madeUpOn !== null).length,
+    verses: kept.filter(verseKept).length,
+    devotionals: kept.filter(devotionalKept).length,
+    quiz: {
+      items,
+      scores,
+      passed: items !== null && scores.some((score) => passesQuiz(score, items)),
+    },
+    book: quiz.read.has(canonicalId(enrollmentId)),
+  };
+}
+
+/**
+ * **One SOL student's grade is their checklist** (decision 0501, point 17; decision 0514, points
+ * 11 and 12): at most three absences, each made up, all ten memory verses and devotionals, the
+ * quiz passed and the book read. Anything owed is *Not passed*, *Why* naming every check not met,
+ * the absences first, in the words the owner approved; there is no *Not yet*, SOL having no Encounter. A lesson held before they
+ * joined is no absence, being owed as a make-up (decision 0503).
+ */
+function solGradeOf(
+  register: Map<number, RegisterEntry>,
+  checklist: SolChecklist,
+): Omit<StudentGrade, 'enrollment_id' | 'person_id'> {
+  const signs: Sign[] = SOL_LESSONS.map((n) => {
+    const entry = register.get(n);
+    if (entry === undefined) return 'NONE';
+    if (entry.came) return 'CAME';
+    if (entry.madeUpOn !== null) return 'MADE_UP';
+    return entry.beforeJoining ? 'BEFORE_JOINING' : 'ABSENT';
+  });
+  const base = {
+    lessons_kept: SOL_LESSONS.filter((n) => done(register.get(n))).length,
+    lessons_made_up: checklist.made_up,
+    signs,
+    joins_at_lesson_6: false,
+  };
+  // **Every check not met is named, the absences first** (owner, 2026-11-26, "B, name
+  // everything"), so each value Final Grades shows in red has its reason in *Why*.
+  const reasons: string[] = [];
+  if (checklist.absences > ABSENCES_ALLOWED) {
+    reasons.push(`${checklist.absences} absences, over the ${ABSENCES_ALLOWED} allowed.`);
+  }
+  const owed = SOL_LESSONS.filter((n) => {
+    const entry = register.get(n);
+    return entry !== undefined && !entry.came && entry.madeUpOn === null;
+  });
+  if (owed.length > 0) {
+    reasons.push(`${joinLessons(owed)} not made up.`);
+  }
+  // A lesson come to or made up whose verse or devotional was never ticked, then the book.
+  const missing = SOL_LESSONS.flatMap((n) => {
+    const entry = register.get(n);
+    if (!done(entry)) return [];
+    return [
+      ...(verseKept(entry) ? [] : [`L${n} verse`]),
+      ...(devotionalKept(entry) ? [] : [`L${n} devotional`]),
+    ];
+  });
+  if (!checklist.book) {
+    missing.push('the book');
+  }
+  if (missing.length > 0) {
+    const words = joinWords(missing);
+    reasons.push(`${words.charAt(0).toUpperCase()}${words.slice(1)} missing.`);
+  }
+  const { items, scores, passed } = checklist.quiz;
+  if (!passed) {
+    if (items === null || scores.length === 0) {
+      reasons.push('Quiz not taken.');
+    } else {
+      const after =
+        scores.length === 2 ? ' after one retake' : scores.length >= 3 ? ' after two retakes' : '';
+      const percents = scores.map((score) => `${Math.round((score * 100) / items)}%`);
+      reasons.push(`Quiz not passed${after}: ${percents.join(', ')}.`);
+    }
+  }
+  return reasons.length === 0
+    ? { ...base, grade: 'PASSED', reason: 'Everything done.' }
+    : { ...base, grade: 'NOT_PASSED', reason: reasons.join(' ') };
 }
 
 const LATER_TERM =
@@ -1550,6 +1751,12 @@ function previewShape(
 }
 
 /** *L2*, *L1 and L3*, *L1, L2 and L4*. */
+function joinWords(words: readonly string[]): string {
+  return words.length <= 1
+    ? (words[0] ?? '')
+    : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
 function joinLessons(lessons: readonly number[]): string {
   const named = lessons.map((n) => `L${n}`);
   return named.length <= 1
