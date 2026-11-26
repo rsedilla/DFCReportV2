@@ -538,6 +538,17 @@ export interface MyPerson {
   joined_on: string;
   /** The ENC column (decision 0507): attended, enrolled and not yet recorded, or missed. */
   encounter?: 'CAME' | 'ENROLLED' | 'MISSED' | null;
+  /**
+   * SOL's card (decision 0514, point 14): what is still missing so far, the verses and
+   * devotionals out of ten, the quiz as passed or not and never its score, and the book.
+   */
+  sol?: {
+    verses: number;
+    devotionals: number;
+    quiz: 'PASSED' | 'NOT_PASSED' | 'NOT_TAKEN';
+    book: boolean;
+    still_missing: string[];
+  };
   marks: AttendanceStudent['marks'];
 }
 

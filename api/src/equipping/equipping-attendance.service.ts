@@ -284,8 +284,6 @@ export class EquippingAttendanceService {
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
         .innerJoin('equipping_classes as c', 'c.id', 'e.class_id')
-        // A leader's SOL 1 card comes with its own step (decision 0514).
-        .where('c.level', '=', 'LIFE_CLASS')
         .leftJoin('equipping_guide_students as gs', (join) =>
           join.onRef('gs.enrollment_id', '=', 'e.id').on('gs.ended_at', 'is', null),
         )
@@ -369,7 +367,11 @@ export class EquippingAttendanceService {
     };
     const encounters = await this.encounterOf(
       this.db,
-      enrolled.map((row) => row.person_id),
+      enrolled.filter((row) => row.level === 'LIFE_CLASS').map((row) => row.person_id),
+    );
+    const sol = await this.solCardsOf(
+      enrolled.filter((row) => row.level !== 'LIFE_CLASS'),
+      registers,
     );
     return {
       data: [...placed]
@@ -397,8 +399,13 @@ export class EquippingAttendanceService {
             teacher: person(row.teacher_person_id),
             guide: person(row.guide_person_id),
             joined_on: manilaDayOf(row.started_at),
-            encounter: encounters.get(canonicalId(row.person_id)) ?? null,
-            marks: CLASS_LESSONS.flatMap((n) => {
+            encounter:
+              row.level === 'LIFE_CLASS'
+                ? (encounters.get(canonicalId(row.person_id)) ?? null)
+                : null,
+            // SOL's checklist, the quiz as passed or not and never its score (decision 0514, point 14).
+            ...(row.level === 'LIFE_CLASS' ? {} : { sol: sol.get(canonicalId(row.enrollment_id)) }),
+            marks: lessonsOf(row.level).flatMap((n) => {
               const entry = register.get(n);
               return entry
                 ? [
@@ -416,6 +423,87 @@ export class EquippingAttendanceService {
           };
         }),
     };
+  }
+
+  /**
+   * **A leader's SOL card** (decision 0514, point 14, as approved after Canvas Parent, Khan
+   * Academy and Google Classroom's guardian summaries): what is still missing so far, a lesson to
+   * make up or a verse or devotional owed from a closed week or a make-up (owner, 2026-11-27), then
+   * the verses and devotionals out of ten, the quiz as passed, not yet passed or not yet taken, and
+   * the book. **The quiz score is never shown to the leader**, as Google leaves grades out of a
+   * guardian's summary; the class's own register shows it.
+   */
+  private async solCardsOf(
+    rows: readonly { enrollment_id: string; class_id: string }[],
+    registers: Map<string, Map<number, RegisterEntry>>,
+  ): Promise<Map<string, Record<string, unknown>>> {
+    const result = new Map<string, Record<string, unknown>>();
+    if (rows.length === 0) {
+      return result;
+    }
+    const ids = rows.map((row) => row.enrollment_id);
+    const [quizzes, tries, books] = await Promise.all([
+      this.db
+        .selectFrom('equipping_quizzes')
+        .select(['class_id', 'items'])
+        .where('class_id', 'in', [...new Set(rows.map((row) => row.class_id))])
+        .execute(),
+      this.db
+        .selectFrom('equipping_quiz_tries')
+        .select(['enrollment_id', 'score'])
+        .where('enrollment_id', 'in', ids)
+        .where('superseded_at', 'is', null)
+        .execute(),
+      this.db
+        .selectFrom('equipping_books')
+        .select(['enrollment_id', 'read'])
+        .where('enrollment_id', 'in', ids)
+        .where('superseded_at', 'is', null)
+        .execute(),
+    ]);
+    const itemsOf = new Map(quizzes.map((q) => [canonicalId(q.class_id), q.items]));
+    const now = await databaseNow(this.db);
+    for (const row of rows) {
+      const key = canonicalId(row.enrollment_id);
+      const register = registers.get(row.enrollment_id) ?? new Map<number, RegisterEntry>();
+      const entries = SOL_LESSONS.flatMap((n) => {
+        const entry = register.get(n);
+        return entry ? [entry] : [];
+      });
+      const done = (e: RegisterEntry) => e.came || e.madeUpOn !== null;
+      const verse = (e: RegisterEntry) => e.verse === true || e.verseBroughtOn !== null;
+      const devotional = (e: RegisterEntry) =>
+        e.devotional === true || e.devotionalBroughtOn !== null;
+      const items = itemsOf.get(canonicalId(row.class_id)) ?? null;
+      const scores = tries.filter((t) => canonicalId(t.enrollment_id) === key).map((t) => t.score);
+      const read = books.some((b) => canonicalId(b.enrollment_id) === key && b.read);
+      result.set(key, {
+        verses: entries.filter((e) => done(e) && verse(e)).length,
+        devotionals: entries.filter((e) => done(e) && devotional(e)).length,
+        quiz:
+          scores.length === 0 || items === null
+            ? 'NOT_TAKEN'
+            : scores.some((score) => passesQuiz(score, items))
+              ? 'PASSED'
+              : 'NOT_PASSED',
+        book: read,
+        // Owed so far, lesson by lesson. A verse or devotional counts as the Teacher's *Verses and
+        // devotionals still owed* counts it: once the lesson's week has closed, or from a make-up
+        // recorded without it. The quiz and book are on their own line, being due only at posting
+        // (owner, 2026-11-27, "Yes, both").
+        still_missing: entries.flatMap((e) =>
+          !done(e)
+            ? [`L${e.lesson} make-up`]
+            : !e.came || now.getTime() >= recordClosesAt(e.heldOn).getTime()
+              ? [
+                  ...(verse(e) ? [] : [`L${e.lesson} verse`]),
+                  ...(devotional(e) ? [] : [`L${e.lesson} devotional`]),
+                ]
+              : [],
+        ),
+      });
+    }
+    return result;
   }
 
   /**

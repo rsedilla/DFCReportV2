@@ -179,6 +179,15 @@ or *Nothing missing so far*; then the class, Teacher and Guide, the *L1* to *L10
 *Verses N of 10 · Devotionals N of 10 · Quiz passed* (or *not yet passed*) *· Book read*. **The
 quiz score is never shown to the leader**, as Google leaves grades out of a guardian's summary.
 
+**Nothing is missing before it is due** (owner, 2026-11-27, "Yes, both", from screenshots compared
+with Google Classroom's guardian summaries, Canvas Parent, Moodle's *Recently overdue* and
+PeopleSoft's checklists, each calling work missing only once its due date has passed). A verse or
+devotional is still missing as the Teacher's *Verses and devotionals still owed* counts it: once
+its lesson's week has closed, or from a make-up recorded without it; while the week is open the
+lesson's own tab is where it is ticked. A lesson not attended reads *make-up* at once, as Life
+Class's card does. The quiz and the book are not in *Still missing*: neither is due until the
+class is posted, so they stay on the last line, *Quiz not yet · Book not yet*.
+
 ## What this step builds
 
 Points 1 to 7: migration `0060_equipping_sol_1.sql` (the SOL 1 tick, needing Full view; a class or
@@ -211,7 +220,9 @@ after, a lesson up to 10, each level held to its shape by a trigger, SOL's to *R
 a posted SOL class's late ticks, quiz tries and *Book read* written only beside a change of the
 grade); the change and its preview reaching each item; and the dialog with *What to change*.
 
-Point 14 is ruled and not built; until it is, what Section 29 says of it describes no route, and a
-SOL 1 class is left out of a leader's people in the school.
+Point 14, the fourth step: a SOL 1 class joins a leader's people in the school, each card carrying
+*Still missing* worked out from the register (a lesson not made up, and a verse or devotional owed
+from a closed week or a make-up), the *L1* to *L10* strip, and the verses, devotionals, quiz and
+book line. The quiz is *passed*, *not yet passed* or *not yet*, and no score reaches a leader.
 
 Previous: [2026-11-23 — The Admin changes a lesson after posting, and the grade is worked out again](0513-the-admin-changes-a-lesson-after-posting-and-the-grade-is-worked-out-again.md)

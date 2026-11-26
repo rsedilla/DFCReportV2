@@ -656,19 +656,28 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       ).toEqual([]);
     });
 
-    it('lists a SOL 1 class among a Guide’s classes, and leaves it out of a leader’s people', async () => {
+    it('lists a SOL 1 class among a Guide’s classes, and a leader’s SOL 1 card without the quiz score', async () => {
       const { classId } = await solClassWithStudent();
       const gilAccount = await createAccount(app, db, { person: gil, roles: ['LEADER'] });
       const mine = await get(gilAccount, 'equipping/my-classes').expect(200);
-      // Its register is built (decision 0514, points 8 to 10); a leader's SOL 1 card is step 4.
       expect((mine.body as { data: { id: string; level: string }[] }).data).toContainEqual(
         expect.objectContaining({ id: classId, level: 'SOL_1' }),
       );
+      // **A leader's SOL 1 card** (decision 0514, point 14): what is still missing, the checklist,
+      // and the quiz as passed or not, never its score.
       const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
       const people = await get(ramonAccount, 'equipping/my-people').expect(200);
-      expect(
-        (people.body as { data: { person: { id: string } }[] }).data.map((each) => each.person.id),
-      ).not.toContain(wil.id);
+      const card = (
+        people.body as {
+          data: { person: { id: string }; level: string; encounter: unknown; sol: unknown }[];
+        }
+      ).data.find((each) => each.person.id === wil.id);
+      expect(card).toMatchObject({
+        level: 'SOL_1',
+        encounter: null,
+        sol: { verses: 0, devotionals: 0, quiz: 'NOT_TAKEN', book: false, still_missing: [] },
+      });
+      expect(JSON.stringify(card)).not.toMatch(/score/);
     });
 
     it('counts registrations for each level', async () => {

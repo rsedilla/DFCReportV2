@@ -416,7 +416,8 @@ export async function mockTeacher(page: Page, screens: 'RECORDING' | 'FULL'): Pr
 /**
  * The reader's people in the school (decision 0504): by default nobody, so a page that does not
  * ask about them stays as it was. `withPeople` gives one of the reader's 12, Lorna, who missed
- * lesson 2, and Gilbert's Rosa, who came to both, in Life Class A.
+ * lesson 2, and Gilbert's Rosa, who came to both, in Life Class A, and the same two in SOL 1 A,
+ * each with SOL's card (decision 0514, point 14).
  */
 export async function mockSchoolPeople(page: Page, withPeople = false): Promise<void> {
   const person = (
@@ -450,6 +451,26 @@ export async function mockSchoolPeople(page: Page, withPeople = false): Promise<
                 { lesson: 1, came: true, made_up_on: null },
                 { lesson: 2, came: true, made_up_on: null },
               ]),
+              {
+                ...person('003', 'Lorna Bautista', true, null, [
+                  { lesson: 1, came: true, made_up_on: null },
+                  { lesson: 2, came: false, made_up_on: null },
+                ]),
+                level: 'SOL_1',
+                class: { id: CLASS_ID, name: 'SOL 1 A' },
+                encounter: null,
+                sol: { verses: 1, devotionals: 1, quiz: 'NOT_TAKEN', book: false, still_missing: ['L2 make-up'] },
+              },
+              {
+                ...person('004', 'Rosa Villanueva', false, { id: '3f1b7c6e-0000-4000-8000-00000000b501', full_name: 'Gilbert Manalo' }, [
+                  { lesson: 1, came: true, made_up_on: null },
+                  { lesson: 2, came: true, made_up_on: null },
+                ]),
+                level: 'SOL_1',
+                class: { id: CLASS_ID, name: 'SOL 1 A' },
+                encounter: null,
+                sol: { verses: 2, devotionals: 2, quiz: 'PASSED', book: false, still_missing: [] },
+              },
             ]
           : [],
       }),

@@ -77,8 +77,32 @@ test('a leader who teaches nothing reads their people in the school, their 12 fi
   await expect(lorna).toContainText('1 of 2 came · L2 not made up yet');
   await expect(mine.getByRole('listitem').filter({ hasText: 'Rosa Villanueva' })).toContainText('2 of 2 came');
 
+  await page.getByRole('group', { name: 'Level' }).getByRole('button', { name: 'SOL 2' }).click();
+  await expect(page.getByText('None of your people are in SOL 2 this term.')).toBeVisible();
+});
+
+test('a leader’s SOL 1 card leads with what is still missing, and never shows the quiz score (decision 0514)', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await mockSignedIn(page);
+  await mockTeacher(page, 'RECORDING');
+  await mockSchoolPeople(page, true);
+  await page.route('**/api/v1/equipping/my-classes', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [] }) }),
+  );
+  await page.goto('/equipping/teach');
   await page.getByRole('group', { name: 'Level' }).getByRole('button', { name: 'SOL 1' }).click();
-  await expect(page.getByText('None of your people are in SOL 1 this term.')).toBeVisible();
+  const mine = page.getByRole('region', { name: 'Your people in SOL 1' });
+  await expect(mine.getByRole('heading', { name: 'Your people in SOL 1 · 2' })).toBeVisible();
+  const lorna = mine.getByRole('listitem').filter({ hasText: 'Lorna Bautista' });
+  await expect(lorna).toContainText('Still missing: L2 make-up');
+  await expect(lorna.getByRole('columnheader')).toHaveText(['L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7', 'L8', 'L9', 'L10']);
+  await expect(lorna).toContainText('Verses 1 of 10 · Devotionals 1 of 10 · Quiz not yet · Book not yet');
+  const rosa = mine.getByRole('listitem').filter({ hasText: 'Rosa Villanueva' });
+  await expect(rosa).toContainText('Nothing missing so far');
+  await expect(rosa).toContainText('Quiz passed');
+  await expect(mine).not.toContainText('%');
 });
 
 test('a leader with no class and nobody enrolled has no Equipping', async ({ page }) => {
