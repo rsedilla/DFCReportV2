@@ -206,7 +206,7 @@ export function GradeChangeDialog({
             <span className="font-semibold">{name}</span> · {className}
           </p>
           <p className="mt-2">
-            L{p.lesson}: {signWords(p.sign_before, p.made_up_on_before)} →{' '}
+            L{p.lesson}: {signWords(p.sign_before!, p.made_up_on_before ?? null)} →{' '}
             <span className="font-semibold">
               {signWords(input!.to, input!.to === 'MADE_UP' ? madeUpOn : null)}
             </span>

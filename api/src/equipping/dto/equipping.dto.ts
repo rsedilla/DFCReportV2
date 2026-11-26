@@ -402,31 +402,120 @@ export const GRADE_CHANGE_TO = ['CAME', 'ABSENT', 'MADE_UP'] as const;
 /** Why a lesson is changed after posting, chosen from two (decision 0513). */
 export const GRADE_CHANGE_WHY = ['MADE_UP_AFTER_POSTING', 'RECORDED_WRONGLY'] as const;
 
+/** What a SOL change reaches (decision 0514, point 12). */
+export const GRADE_CHANGE_ITEMS = ['ATTENDANCE', 'VERSE', 'DEVOTIONAL', 'QUIZ', 'BOOK'] as const;
+
 /** `GET /equipping/final-grades/grades/{id}/change-preview` (decision 0513). */
 export class GradeChangePreviewDto {
+  /** A lesson, for attendance, a verse or a devotional; Life Class's are 1 to 9, SOL's 1 to 10. */
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(9)
-  lesson!: number;
+  @Max(10)
+  lesson?: number;
 
+  /** Attendance: what the lesson becomes. */
+  @IsOptional()
   @IsIn(GRADE_CHANGE_TO)
-  to!: (typeof GRADE_CHANGE_TO)[number];
+  to?: (typeof GRADE_CHANGE_TO)[number];
 
   @IsOptional()
   @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })
   made_up_on?: string;
+
+  /**
+   * What a SOL change reaches (decision 0514, point 12): a lesson's attendance, as a Life Class
+   * change always does, a lesson's memory verse or devotional, a quiz try's score or *Book read*.
+   */
+  @IsOptional()
+  @IsIn(GRADE_CHANGE_ITEMS)
+  item?: (typeof GRADE_CHANGE_ITEMS)[number];
+
+  /** A verse or devotional: handed in or not. */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  handed_in?: boolean;
+
+  /** The day a verse or devotional was handed in, as it happened. */
+  @IsOptional()
+  @IsManilaCalendarDate({ message: 'brought_on must be a real calendar date, YYYY-MM-DD' })
+  brought_on?: string;
+
+  /** A quiz try and its score. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  try?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(500)
+  score?: number;
+
+  /** *Book read*. */
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  read?: boolean;
 }
 
 /** `POST /equipping/final-grades/grades/{id}/changes`: one lesson, with the reason (decision 0513). */
 export class ChangeGradeDto {
+  @IsOptional()
   @IsInt()
   @Min(1)
-  @Max(9)
-  lesson!: number;
+  @Max(10)
+  lesson?: number;
 
+  @IsOptional()
   @IsIn(GRADE_CHANGE_TO)
-  to!: (typeof GRADE_CHANGE_TO)[number];
+  to?: (typeof GRADE_CHANGE_TO)[number];
+
+  /**
+   * What a SOL change reaches (decision 0514, point 12): a lesson's attendance, as a Life Class
+   * change always does, a lesson's memory verse or devotional, a quiz try's score or *Book read*.
+   */
+  @IsOptional()
+  @IsIn(GRADE_CHANGE_ITEMS)
+  item?: (typeof GRADE_CHANGE_ITEMS)[number];
+
+  /** A verse or devotional: handed in or not. */
+  @IsOptional()
+  @IsBoolean()
+  handed_in?: boolean;
+
+  /** The day a verse or devotional was handed in, as it happened. */
+  @IsOptional()
+  @IsManilaCalendarDate({ message: 'brought_on must be a real calendar date, YYYY-MM-DD' })
+  brought_on?: string;
+
+  /** A quiz try and its score. */
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(3)
+  try?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(500)
+  score?: number;
+
+  /** *Book read*. */
+  @IsOptional()
+  @IsBoolean()
+  read?: boolean;
 
   @IsOptional()
   @IsManilaCalendarDate({ message: 'made_up_on must be a real calendar date, YYYY-MM-DD' })

@@ -1184,15 +1184,33 @@ export type GradeChangeSign = 'CAME' | 'ABSENT' | 'MADE_UP' | 'BEFORE_JOINING';
  * A lesson of a posted class changed by the Admin with a reason, and the grade worked out again
  * (decision 0513). Kept as written; the posted grade is never rewritten.
  */
+export type GradeChangeItem = 'ATTENDANCE' | 'VERSE' | 'DEVOTIONAL' | 'QUIZ' | 'BOOK';
+
 export interface EquippingGradeChangesTable {
   id: Generated<string>;
   seq: Generated<string>;
   final_grade_id: string;
-  lesson: number;
-  sign_before: GradeChangeSign;
+  /**
+   * What a change reaches (decision 0514, point 12): a lesson's attendance, as a Life Class change
+   * always does, or for SOL a lesson's verse or devotional, a quiz try's score or *Book read*.
+   */
+  item: Generated<GradeChangeItem>;
+  /** The lesson; none for a quiz try or the book. */
+  lesson: number | null;
+  /** Attendance only. */
+  sign_before: GradeChangeSign | null;
   made_up_on_before: string | null;
-  sign_after: Exclude<GradeChangeSign, 'BEFORE_JOINING'>;
+  sign_after: Exclude<GradeChangeSign, 'BEFORE_JOINING'> | null;
   made_up_on_after: string | null;
+  /** A verse or devotional, HANDED_IN or NOT_HANDED_IN; the book, READ or NOT_READ. */
+  value_before: string | null;
+  value_after: string | null;
+  /** The day a verse or devotional was handed in, as it happened. */
+  brought_on: string | null;
+  /** A quiz try and its score before (none where it was never recorded) and after. */
+  quiz_try: number | null;
+  score_before: number | null;
+  score_after: number | null;
   why: 'MADE_UP_AFTER_POSTING' | 'RECORDED_WRONGLY';
   details: string;
   grade_before: 'PASSED' | 'NOT_PASSED' | 'NOT_YET';
@@ -1203,8 +1221,8 @@ export interface EquippingGradeChangesTable {
   lessons_made_up_after: number;
   joins_at_lesson_6_after: boolean;
   /** What the grade before read the Encounter as, and what the change worked from (point 14). */
-  encounter_before: 'CAME' | 'NOT_CAME';
-  encounter_after: 'CAME' | 'MISSED' | 'ENROLLED' | 'NONE';
+  encounter_before: 'CAME' | 'NOT_CAME' | null;
+  encounter_after: 'CAME' | 'MISSED' | 'ENROLLED' | 'NONE' | null;
   /** What the change did to the graded enrollment (point 10). */
   enrollment_effect: 'ENDS' | 'REOPENS' | null;
   /** What the school's Life Class stands filed under after the change (decisions 0509, 0513). */

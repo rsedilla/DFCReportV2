@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { EquippingFrame, LevelPicker, TermPicker } from '@/components/equipping-frame';
 import { GradesPanel, phaseWords } from '@/components/final-grades';
 import { GradeChangeDialog } from '@/components/grade-change-dialog';
+import { SolGradeChangeDialog } from '@/components/sol-grade-change-dialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogActions } from '@/components/ui/dialog';
 import { FailureNotice } from '@/components/ui/failure-notice';
@@ -106,7 +107,17 @@ function ClassGradesView({ data }: { data: ClassGrades }) {
         action={<PostButton data={data} />}
         onChange={(s) => setChanging(s.enrollment_id)}
       />
-      {student ? (
+      {student && data.class.level !== undefined && data.class.level !== 'LIFE_CLASS' ? (
+        // A SOL grade by what SOL grades by, recorded wrongly only (decision 0514, point 12).
+        <SolGradeChangeDialog
+          key={student.enrollment_id}
+          open
+          onClose={() => setChanging(null)}
+          student={student}
+          className={data.class.name}
+          postedAt={data.status.posted?.at ?? null}
+        />
+      ) : student ? (
         <GradeChangeDialog
           key={student.enrollment_id}
           open

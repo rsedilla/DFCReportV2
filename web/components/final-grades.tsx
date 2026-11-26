@@ -9,6 +9,7 @@ import {
   enrollmentWords,
   signWords,
 } from '@/components/grade-change-dialog';
+import { solChangeWords } from '@/components/sol-grade-change-dialog';
 import { Button } from '@/components/ui/button';
 import { timeLabel } from '@/lib/cells';
 import {
@@ -108,9 +109,16 @@ function History({ s, postedAt }: { s: ClassGrades['students'][number]; postedAt
         </li>
         {changes.map((c, i) => (
           <li key={i}>
-            {shortDay(c.at)} · Changed{c.by ? ` by ${c.by}` : ''} · L{c.lesson}{' '}
-            {signWords(c.sign_before, c.made_up_on_before)} → {signWords(c.sign_after, c.made_up_on_after)} ·
-            grade {GRADE_WORDS[c.grade_before]} → {GRADE_WORDS[c.grade_after]} ·{' '}
+            {shortDay(c.at)} · Changed{c.by ? ` by ${c.by}` : ''} ·{' '}
+            {c.item !== undefined && c.item !== 'ATTENDANCE' ? (
+              solChangeWords(c)
+            ) : (
+              <>
+                L{c.lesson} {signWords(c.sign_before!, c.made_up_on_before)} →{' '}
+                {signWords(c.sign_after!, c.made_up_on_after)}
+              </>
+            )}{' '}
+            · grade {GRADE_WORDS[c.grade_before]} → {GRADE_WORDS[c.grade_after]} ·{' '}
             <span className="italic">
               {WHY_WORDS[c.why]}: {c.details}
             </span>
@@ -407,7 +415,7 @@ export function GradesPanel({
                               type="button"
                               variant="secondary"
                               className="w-auto py-1.5 whitespace-nowrap"
-                              aria-label={`Change ${s.person.full_name ?? 'this student'}’s lessons`}
+                              aria-label={`Change ${s.person.full_name ?? 'this student'}’s ${sol ? 'record' : 'lessons'}`}
                               onClick={() => onChange(s)}
                             >
                               Change…
@@ -477,7 +485,7 @@ export function GradesPanel({
                 ) : null}
                 {changes ? (
                   <Button type="button" variant="secondary" className="mt-2" onClick={() => onChange(s)}>
-                    Change lessons…
+                    {sol ? 'Change…' : 'Change lessons…'}
                   </Button>
                 ) : null}
               </li>

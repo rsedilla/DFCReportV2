@@ -144,6 +144,24 @@ absence limit reads, for example, *4 absences, over the 3 allowed. L3 and L8 not
 verse and the book missing.*, so each value Final Grades shows in red has its reason in *Why*.
 Life Class keeps its single reason.
 
+**The Admin changes a SOL grade after posting, as Life Class's is changed** (owner, 2026-11-26,
+"Yes, build it", from screenshots compared with Google Classroom's grade history, Moodle's grade
+override, Canvas's final grade override, PeopleSoft's grade change request and UP's Form 13-D):
+the same dialog, with *What to change* first (a lesson's attendance, its memory verse, its
+devotional, a quiz score, or *Book read*), what the grade becomes shown before saving, then a
+summary to confirm, and each change kept in the grade's history. **Recorded wrongly is its only
+reason** (owner, 2026-11-26, "Recorded wrongly only"): a change after posting corrects what was
+done on or before the day the class was posted and missed in the record, so a make-up or a day
+handed in falls on or before that day, and what was still owed when the class was posted is a
+retake, as above. **Only a quiz try already recorded is corrected** (owner, 2026-11-26, "No,
+correct only", compared with Canvas and Moodle, where a missing attempt is a new attempt the
+student takes): a try not recorded before posting carries no day to check against it and is a
+retake. **A correction to a lesson's attendance keeps its verse and devotional as recorded**
+(owner, 2026-11-26, "keep them", as Moodle leaves other grade items as they are when one is
+changed): a mistake in attendance does not make them wrong too, and one that was is its own
+change. Only *Absent* clears them, a lesson not done counting neither. A grade made Passed files SOL 1 *From the school*, dated that day; one changed away from
+Passed withdraws it.
+
 **13. Once SOL 1's first class opens, only the Admin ticks SOL 1 before the school** (owner,
 2026-11-24, "Admin only"), as decision 0509 gave the Encounter and Life Class, with a reason; a
 posted Passed files SOL 1 *From the school*. The note above the Training table names the levels the
@@ -187,10 +205,11 @@ met; checking and posting a SOL class as Life Class's are; a posted *Passed* fil
 school*; SOL 1 the school's in Training once a SOL 1 class opens; and *Final Grades* with a *Level*
 picker and the five checks, with *Grades* on a SOL class on the Coordinator's *Classes*.
 
-**Not built yet: the Admin's change of a SOL grade after posting** (point 12). How the Admin
-corrects a verse, devotional, quiz or book once a class is posted has no screen of its own yet,
-and comes with one shown to the owner first; until then a change of a SOL grade is refused
-`INVARIANT_VIOLATION`, saying so, and Life Class's changes are unchanged.
+**The Admin's change of a SOL grade after posting** (point 12, as ruled on 2026-11-26): migration
+`0063_equipping_sol_grade_changes.sql` (a grade change names its item and the value before and
+after, a lesson up to 10, each level held to its shape by a trigger, SOL's to *Recorded wrongly*;
+a posted SOL class's late ticks, quiz tries and *Book read* written only beside a change of the
+grade); the change and its preview reaching each item; and the dialog with *What to change*.
 
 Point 14 is ruled and not built; until it is, what Section 29 says of it describes no route, and a
 SOL 1 class is left out of a leader's people in the school.

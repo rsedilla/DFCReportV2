@@ -819,9 +819,14 @@ describe('SOL 1’s register (section 29, decision 0514)', () => {
         }),
       ]);
 
-      // Changing a SOL grade after posting is not built yet, and says so.
-      g = await grades();
+      // **The Admin changes a SOL grade after posting, recorded wrongly only** (decision 0514,
+      // point 12; owner rulings of 2026-11-26).
+      // Only the Admin changes a grade after posting (decision 0513).
       expect(g.may_change).toBe(false);
+      const asAdmin = async () =>
+        (await get(admin, `equipping/final-grades/classes/${classId}`).expect(200))
+          .body as typeof g;
+      expect((await asAdmin()).may_change).toBe(true);
       const gradeId = (
         await db
           .selectFrom('equipping_final_grades')
@@ -829,11 +834,140 @@ describe('SOL 1’s register (section 29, decision 0514)', () => {
           .where('enrollment_id', '=', id('Carlo'))
           .executeTakeFirstOrThrow()
       ).id;
-      const change = await get(
+      const changes = `equipping/final-grades/grades/${gradeId}/changes`;
+      const lesson7 = plusDays(firstLesson, 42);
+      const preview = await get(
         admin,
-        `equipping/final-grades/grades/${gradeId}/change-preview?lesson=7&to=CAME`,
-      ).expect(409);
-      expect(errorOf(change).code).toBe('INVARIANT_VIOLATION');
+        `equipping/final-grades/grades/${gradeId}/change-preview?item=DEVOTIONAL&lesson=7&handed_in=true&brought_on=${lesson7}`,
+      ).expect(200);
+      expect(preview.body).toMatchObject({
+        item: 'DEVOTIONAL',
+        grade_after: 'NOT_PASSED',
+        reason_after: 'The book missing. Quiz not passed after two retakes: 60%, 55%, 65%.',
+        training: null,
+      });
+      // Late work after posting is a retake, not a change.
+      const late = await post(admin, changes, {
+        item: 'DEVOTIONAL',
+        lesson: 7,
+        handed_in: true,
+        brought_on: lesson7,
+        why: 'MADE_UP_AFTER_POSTING',
+        details: 'Handed it in after the class was posted.',
+        changes_seen: 0,
+      }).expect(422);
+      expect(errorOf(late).details?.field).toBe('why');
+      // Recorded wrongly means it happened on or before the day the class was posted.
+      const after = await post(admin, changes, {
+        item: 'DEVOTIONAL',
+        lesson: 7,
+        handed_in: true,
+        brought_on: plusDays(today, 1),
+        why: 'RECORDED_WRONGLY',
+        details: 'The Teacher missed the tick.',
+        changes_seen: 0,
+      }).expect(422);
+      expect(errorOf(after).details?.field).toBe('brought_on');
+      const recordedWrongly = (body: object, seen: number) =>
+        post(admin, changes, {
+          ...body,
+          why: 'RECORDED_WRONGLY',
+          details: 'The Teacher missed the tick.',
+          changes_seen: seen,
+        });
+      await recordedWrongly(
+        { item: 'DEVOTIONAL', lesson: 7, handed_in: true, brought_on: lesson7 },
+        0,
+      ).expect(201);
+      await recordedWrongly({ item: 'BOOK', read: true }, 1).expect(201);
+      // Try 3 was really 14 of 20: a pass, so Carlo passes and SOL 1 is filed from the school.
+      const passed = await recordedWrongly({ item: 'QUIZ', try: 3, score: 14 }, 2).expect(201);
+      expect(passed.body).toMatchObject({ grade: 'PASSED', reason: 'Everything done.' });
+      const carloSol1 = () =>
+        db
+          .selectFrom('training_graduations as t')
+          .innerJoin('equipping_registrations as r', 'r.person_id', 't.person_id')
+          .innerJoin('equipping_enrollments as e', 'e.registration_id', 'r.id')
+          .select('t.from_school')
+          .where('e.id', '=', id('Carlo'))
+          .where('t.program', '=', 'SOL_1')
+          .where('t.superseded_at', 'is', null)
+          .execute();
+      expect(await carloSol1()).toEqual([{ from_school: true }]);
+      // Changed back, SOL 1 the school filed is withdrawn.
+      await recordedWrongly({ item: 'BOOK', read: false }, 3).expect(201);
+      expect(await carloSol1()).toEqual([]);
+
+      // Each change is kept on the row.
+      g = await asAdmin();
+      const history = (
+        g.students.find((s) => s.enrollment_id === id('Carlo')) as unknown as {
+          history: { item: string; value_after: string | null; score_after: number | null }[];
+        }
+      ).history;
+      expect(history.map((h) => [h.item, h.value_after, h.score_after])).toEqual([
+        ['DEVOTIONAL', 'HANDED_IN', null],
+        ['BOOK', 'READ', null],
+        ['QUIZ', null, 14],
+        ['BOOK', 'NOT_READ', null],
+      ]);
+      // A devotional brought late, then its lesson changed to Absent: the day it was brought
+      // stands on nothing and is closed with it, never left to count on its own.
+      const lesson8 = plusDays(firstLesson, 49);
+      await recordedWrongly({ item: 'DEVOTIONAL', lesson: 8, handed_in: false }, 4).expect(201);
+      await recordedWrongly(
+        { item: 'DEVOTIONAL', lesson: 8, handed_in: true, brought_on: plusDays(lesson8, 2) },
+        5,
+      ).expect(201);
+      const broughtL8 = () =>
+        db
+          .selectFrom('equipping_items_brought as b')
+          .innerJoin('equipping_lessons as l', 'l.id', 'b.lesson_id')
+          .select('b.brought_on')
+          .where('b.enrollment_id', '=', id('Carlo'))
+          .where('l.lesson', '=', 8)
+          .where('b.superseded_at', 'is', null)
+          .execute();
+      expect(await broughtL8()).toHaveLength(1);
+      // Corrected to a make-up on a later day, the devotional is kept as recorded (owner,
+      // 2026-11-26, "keep them").
+      await recordedWrongly(
+        { item: 'ATTENDANCE', lesson: 8, to: 'MADE_UP', made_up_on: plusDays(lesson8, 3) },
+        6,
+      ).expect(201);
+      expect(await broughtL8()).toEqual([{ brought_on: plusDays(lesson8, 2) }]);
+      await recordedWrongly({ item: 'ATTENDANCE', lesson: 8, to: 'ABSENT' }, 7).expect(201);
+      expect(await broughtL8()).toEqual([]);
+
+      // Only a try already recorded is corrected: Dino took none before posting, so a try 1
+      // entered now is a retake, not a change (owner, 2026-11-26, "No, correct only").
+      const dinoGrade = (
+        await db
+          .selectFrom('equipping_final_grades')
+          .select('id')
+          .where('enrollment_id', '=', id('Dino'))
+          .executeTakeFirstOrThrow()
+      ).id;
+      const missingTry = await post(admin, `equipping/final-grades/grades/${dinoGrade}/changes`, {
+        item: 'QUIZ',
+        try: 1,
+        score: 15,
+        why: 'RECORDED_WRONGLY',
+        details: 'Took the quiz but the score was never entered.',
+        changes_seen: 0,
+      }).expect(409);
+      expect(errorOf(missingTry)).toMatchObject({
+        code: 'INVARIANT_VIOLATION',
+        details: { field: 'try' },
+      });
+
+      // The posted class's records change only with a change of the grade (migration 0063).
+      await expect(
+        db
+          .insertInto('equipping_books')
+          .values({ enrollment_id: id('Carlo'), read: true, recorded_by: admin.id })
+          .execute(),
+      ).rejects.toThrow(/change only with a change of the grade/);
     });
   });
 });

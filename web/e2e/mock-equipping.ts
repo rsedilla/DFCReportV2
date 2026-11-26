@@ -902,7 +902,10 @@ export async function mockFinalGrades(
  * students graded by the checklist. Called after `mockFinalGrades`, whose list it answers for
  * SOL 1. Every name is invented.
  */
-export async function mockSolFinalGrades(page: Page): Promise<{ sent: { url: string; body: unknown }[] }> {
+export async function mockSolFinalGrades(
+  page: Page,
+  options: { posted?: boolean; twoTries?: boolean } = {},
+): Promise<{ sent: { url: string; body: unknown }[] }> {
   const sent: { url: string; body: unknown }[] = [];
   const id = (n: number) => `3f1b7c6e-0000-4000-8000-${String(n).padStart(12, '0')}`;
   const SOL_CLASS = id(9301);
@@ -935,16 +938,37 @@ export async function mockSolFinalGrades(page: Page): Promise<{ sent: { url: str
     checklist: checklist(list),
     your_disciple: false,
   });
+  const phase = options.posted ? 'POSTED' : 'READY';
+  // Posted, as the Admin reads it: each grade changeable lesson by lesson (decision 0514, point 12).
+  const posted = (n: number, devotional7 = true) =>
+    options.posted
+      ? {
+          final_grade_id: id(7400 + n),
+          changes_seen: 0,
+          history: [],
+          changeable: {
+            lessons: Array.from({ length: 10 }, (_, i) => ({
+              lesson: i + 1,
+              sign: 'CAME',
+              made_up_on: null,
+              held_on: `2027-01-${String(5 + i * 7 > 31 ? 31 : 5 + i).padStart(2, '0')}`,
+              verse: true,
+              devotional: i + 1 === 7 ? devotional7 : true,
+            })),
+            why: null,
+          },
+        }
+      : {};
   const grades = {
     class: { id: SOL_CLASS, name: 'SOL 1 A', level: 'SOL_1', day_of_week: 2, time_of_day: '19:00', place: 'Room 2' },
-    status: status('READY'),
-    may_check: true,
+    status: status(phase),
+    may_check: !options.posted,
     checks_as: 'COORDINATOR',
-    may_change: false,
+    may_change: options.posted === true,
     fingerprint: 'b'.repeat(64),
     students: [
       student(1, 'Imelda Tolentino', 'NOT_PASSED', 'Quiz not passed after two retakes: 60%, 55%, 65%.', 10, {
-        quiz: { items: 20, scores: [12, 11, 13], passed: false },
+        quiz: { items: 20, scores: options.twoTries ? [12, 11] : [12, 11, 13], passed: false },
       }),
       student(2, 'Nestor Villamor', 'NOT_PASSED', 'L7 devotional and the book missing.', 10, {
         made_up: 1,
@@ -958,14 +982,38 @@ export async function mockSolFinalGrades(page: Page): Promise<{ sent: { url: str
       }),
       student(4, 'Efren Quiambao', 'PASSED', 'Everything done.', 10, { made_up: 1 }),
       student(5, 'Tomas Aquino', 'PASSED', 'Everything done.', 10, { quiz: { items: 20, scores: [18], passed: true } }),
-    ].sort(byLastName),
+    ]
+      .map((st, i) => ({ ...st, ...posted(i + 1, st.person.full_name !== 'Nestor Villamor') }))
+      .sort(byLastName),
   };
+  await page.route('**/api/v1/equipping/final-grades/grades/*/change-preview?*', (route) => {
+    const url = new URL(route.request().url());
+    const book = url.searchParams.get('item') === 'BOOK' && url.searchParams.get('read') === 'true';
+    return route.fulfill(
+      json({
+        item: url.searchParams.get('item'),
+        lesson: url.searchParams.get('lesson') === null ? null : Number(url.searchParams.get('lesson')),
+        grade_before: 'NOT_PASSED',
+        reason_before: 'L7 devotional and the book missing.',
+        grade_after: book ? 'NOT_PASSED' : 'NOT_PASSED',
+        reason_after: book ? 'L7 devotional missing.' : 'The book missing.',
+        not_counted: [],
+        training: null,
+        encounter_change: null,
+        enrollment: null,
+      }),
+    );
+  });
+  await page.route('**/api/v1/equipping/final-grades/grades/*/changes', (route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ ok: true }, 201));
+  });
   await page.route('**/api/v1/equipping/final-grades?*', (route) => {
     if (!route.request().url().includes('level=SOL_1')) return route.fallback();
     return route.fulfill(
       json({
         data: [
-          { id: SOL_CLASS, name: 'SOL 1 A', day_of_week: 2, time_of_day: '19:00', status: status('READY') },
+          { id: SOL_CLASS, name: 'SOL 1 A', day_of_week: 2, time_of_day: '19:00', status: status(phase) },
           { id: id(9302), name: 'SOL 1 B', day_of_week: 4, time_of_day: '19:00', status: status('WAITING_COORDINATOR') },
         ],
       }),
