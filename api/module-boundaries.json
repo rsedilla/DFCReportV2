@@ -90,6 +90,13 @@
   ],
   "crossModule": [
     {
+      "file": "src/equipping/equipping.service.ts",
+      "method": "registrations",
+      "table": "persons",
+      "kind": "join",
+      "reason": "The Registrar's Registration list is in last-name order and paged by the database (decision 0515). Rooted in equipping_registrations, which people does not own and cannot query, so the join cannot move to the owning module; reading the list whole to sort it in memory would materialise an unbounded set, and returning identifiers would turn one query into one per row."
+    },
+    {
       "file": "src/hierarchy/hierarchy.service.ts",
       "method": "openDisciplesOf",
       "table": "persons",

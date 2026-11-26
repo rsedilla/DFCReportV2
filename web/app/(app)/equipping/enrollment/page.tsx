@@ -26,6 +26,7 @@ import {
   type ClassDetail,
   type EquippingClass,
   type Term,
+  listName,
 } from '@/lib/equipping';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
@@ -284,7 +285,7 @@ function ClassView({
               key={row.enrollment_id}
               className="flex flex-col gap-2 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
             >
-              <span>{row.person.full_name}</span>
+              <span>{listName(row.person)}</span>
               <span className="flex gap-2">
                 {classes.length > 1 ? (
                   <Button type="button" variant="secondary" className="w-auto sm:min-w-28" onClick={() => setMoving(row)}>
@@ -515,7 +516,7 @@ function ReadyRows({
                 ) : null}
               </td>
               <td className="px-3 py-3 align-top">
-                {row.person.full_name}
+                {listName(row.person)}
                 {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
                 <JoinsAtLesson6 row={row} lesson6={lesson6} startOver={startOver} onStartOver={onStartOver} />
                 {row.blocked ? (
@@ -534,11 +535,11 @@ function ReadyRows({
           <li key={row.registration_id} className="px-3 py-2">
             {row.blocked === null ? (
               <Tick checked={ticked.has(row.registration_id)} onChange={(checked) => onTick(row.registration_id, checked)}>
-                {row.person.full_name}
+                {listName(row.person)}
               </Tick>
             ) : (
               <>
-                <p className="pt-2 text-sm font-semibold">{row.person.full_name}</p>
+                <p className="pt-2 text-sm font-semibold">{listName(row.person)}</p>
                 <p className="text-field-invalid text-sm">{blockedText(row.blocked)}</p>
               </>
             )}

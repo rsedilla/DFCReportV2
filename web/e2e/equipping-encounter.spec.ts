@@ -67,7 +67,7 @@ test('from the weekend’s first day, the Registrar saves who came', async ({ pa
   const { sent } = await open(page, 'RECORDING');
   const form = page.getByRole('region', { name: /Who came to the Men’s Encounter/ });
   await expect(form.getByRole('checkbox')).toHaveCount(2);
-  await expect(form.getByRole('checkbox', { name: /Jose Bautista/ })).toBeChecked();
+  await expect(form.getByRole('checkbox', { name: /Bautista, Jose/ })).toBeChecked();
   await expect(form.getByRole('status')).toHaveText('1 came · 1 did not: Wilfredo Tan');
   await expect(page.getByRole('button', { name: /^Enroll/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save who came' }).click();

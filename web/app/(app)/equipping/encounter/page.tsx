@@ -15,6 +15,7 @@ import {
   type EncounterList,
   type EncounterNetwork,
   type EncounterSign,
+  listName,
 } from '@/lib/equipping';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { describeFailure } from '@/lib/messages';
@@ -290,7 +291,7 @@ function Group({
             ].filter((each): each is string => each !== null);
             const body = (
               <span className="flex flex-col gap-0.5">
-                <span className="font-semibold">{s.person.full_name}</span>
+                <span className="font-semibold">{listName(s.person)}</span>
                 <span className="text-muted text-xs">
                   {s.class.name} · Cell leader {s.cell_leader?.full_name ?? 'none'}
                   {s.age_on_weekend !== null ? ` · ${s.age_on_weekend} on ${weekendDay}` : ''}
@@ -411,7 +412,7 @@ function WhoCame({
                     }}
                   />
                   <span>
-                    <span className="block font-semibold">{e.person.full_name}</span>
+                    <span className="block font-semibold">{listName(e.person)}</span>
                     <span className="text-muted block text-xs">{e.class.name}</span>
                   </span>
                 </label>

@@ -14,7 +14,13 @@ import { databaseNow } from '../common/time/submission-window';
 import type { Database, NetworkName, Sex } from '../database/schema';
 
 import { normalizeName } from './duplicate-matching';
-import { composeName, escapeLike, type PersonRecord, type SearchCursor } from './people.shared';
+import {
+  composeListName,
+  composeName,
+  escapeLike,
+  type PersonRecord,
+  type SearchCursor,
+} from './people.shared';
 
 /**
  * What another module may learn about a Person in order to decide about them.
@@ -36,6 +42,8 @@ export interface PersonForDecision {
   memberId: string;
   /** Composed here, because `people` owns name shape (section 3). */
   fullName: string;
+  /** Last name first, *Aquino, Tomas R.*, for a list in last-name order (decision 0515). */
+  listName: string;
   /**
    * The given name on its own, for addressing somebody rather than identifying
    * them — a greeting, or the salutation of an email.
@@ -154,6 +162,7 @@ export class PeopleReadService {
       id: person.id,
       memberId: person.member_id,
       fullName: composeName(person),
+      listName: composeListName(person),
       firstName: person.first_name,
       lastName: person.last_name,
       middleName: person.middle_name,
@@ -211,6 +220,7 @@ export class PeopleReadService {
           id: row.id,
           memberId: row.member_id,
           fullName: composeName(row),
+          listName: composeListName(row),
           firstName: row.first_name,
           lastName: row.last_name,
           middleName: row.middle_name,
@@ -419,7 +429,10 @@ export class PeopleReadService {
   async namesOf(
     personIds: readonly string[],
   ): Promise<
-    Map<string, { memberId: string; fullName: string; firstName: string; lastName: string }>
+    Map<
+      string,
+      { memberId: string; fullName: string; listName: string; firstName: string; lastName: string }
+    >
   > {
     if (personIds.length === 0) {
       return new Map();
@@ -437,6 +450,7 @@ export class PeopleReadService {
         {
           memberId: row.member_id,
           fullName: composeName(row),
+          listName: composeListName(row),
           // The parts a list orders by, the title never among them (decisions 0271, 0359).
           firstName: row.first_name,
           lastName: row.last_name,

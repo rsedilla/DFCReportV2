@@ -40,6 +40,7 @@ import { lifeClassFiledOf, type LifeClassFiled } from './life-class-from-school'
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, GradeChangeSign } from '../database/schema';
 import type { EquippingTermDto } from './dto/equipping.dto';
+import { bySchoolName, schoolPerson } from './school-order';
 
 /** The register's nine columns: lessons 1 to 4, the Encounter as 5, then 6 to 9. */
 const COLUMNS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
@@ -202,7 +203,7 @@ export class EquippingGradesService {
       students: standing.students
         .map((s) => ({
           enrollment_id: s.enrollment_id,
-          person: { id: s.person_id, full_name: names.get(s.person_id)?.fullName ?? null },
+          person: schoolPerson(s.person_id, names),
           grade: s.grade,
           reason: s.reason,
           lessons_kept: s.lessons_kept,
@@ -225,7 +226,8 @@ export class EquippingGradesService {
                 history: history.get(s.posted.final_grade_id) ?? [],
               }),
         }))
-        .sort((a, b) => (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '')),
+        // Last-name order, A to Z, as every school list (decision 0515).
+        .sort(bySchoolName(names)),
     };
   }
 

@@ -22,6 +22,7 @@ import { lifeClassFiledOf } from './life-class-from-school';
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, NetworkName } from '../database/schema';
 import type { EncounterAttendanceDto, EnrollEncounterDto } from './dto/equipping.dto';
+import { bySchoolName, schoolPerson } from './school-order';
 
 /** Lessons 1 to 4, which decide the Encounter (decision 0501, point 13). */
 const BEFORE_ENCOUNTER = [1, 2, 3, 4] as const;
@@ -105,8 +106,8 @@ export class EquippingEncounterService {
       return id === null ? null : { id, full_name: nameOf(id) };
     };
     const weekendOfSeason = new Map(seasons.map((s) => [s.id, s.weekend_on]));
-    const byName = <T extends { person: { full_name: string | null } }>(a: T, b: T) =>
-      (a.person.full_name ?? '').localeCompare(b.person.full_name ?? '');
+    // Last-name order, as every school list (decision 0515).
+    const byName = bySchoolName(names);
 
     return {
       network,
@@ -119,7 +120,7 @@ export class EquippingEncounterService {
           const s = standing.statusOf.get(c.enrollment_id)!;
           return {
             enrollment_id: c.enrollment_id,
-            person: { id: c.person_id, full_name: nameOf(c.person_id) },
+            person: schoolPerson(c.person_id, names),
             class: { id: c.class_id, name: c.class_name },
             cell_leader: leaderOf(c.person_id),
             status: s.status,
@@ -141,7 +142,7 @@ export class EquippingEncounterService {
       enrolled: standing.enrolled
         .map((e) => ({
           encounter_enrollment_id: e.id,
-          person: { id: e.person_id, full_name: nameOf(e.person_id) },
+          person: schoolPerson(e.person_id, names),
           class: { id: e.class_id, name: e.class_name },
           came: e.came,
         }))

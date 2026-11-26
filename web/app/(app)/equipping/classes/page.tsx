@@ -41,6 +41,7 @@ import {
   type EquippingLevel,
   type FoundPerson,
   type Term,
+  listName,
 } from '@/lib/equipping';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { shortDate } from '@/lib/lifecycle';
@@ -938,7 +939,7 @@ function GuidesSection({ level, classId }: { level: EquippingLevel; classId: str
         {guides.map((g) => (
           <li key={g.id} className="border-line flex min-h-11 items-center justify-between gap-3 border-b text-sm">
             <span>
-              {g.person.full_name} <span className="text-muted">· {g.sex === 'FEMALE' ? 'women' : 'men'}</span>
+              {listName(g.person)} <span className="text-muted">· {g.sex === 'FEMALE' ? 'women' : 'men'}</span>
               {g.archived ? <span className="text-muted"> · archived, takes no new students</span> : null}
             </span>
             <Button type="button" variant="secondary" disabled={remove.isPending} onClick={() => remove.mutate(g.id)}>
@@ -1024,7 +1025,7 @@ function StudentRow({ each, guides }: { each: ClassStudent; guides: ClassGuide[]
   const otherSex = current !== undefined && each.sex !== null && current.sex !== each.sex;
   return (
     <li className="border-line border-b py-2 text-sm last:border-b-0">
-      <p className="font-semibold">{each.person.full_name}</p>
+      <p className="font-semibold">{listName(each.person)}</p>
       <p className="text-muted">
         Cell leader: {each.cell_leader?.full_name ?? 'none'} · Guide:{' '}
         {each.guide ? each.guide.full_name : <span className="text-field-invalid font-semibold">No Guide yet</span>}
@@ -1047,7 +1048,7 @@ function StudentRow({ each, guides }: { each: ClassStudent; guides: ClassGuide[]
             <option value="">Keep {each.guide?.full_name ?? 'no Guide'}</option>
             {others.map((g) => (
               <option key={g.id} value={g.id}>
-                {g.person.full_name}
+                {listName(g.person)}
               </option>
             ))}
           </SelectField>

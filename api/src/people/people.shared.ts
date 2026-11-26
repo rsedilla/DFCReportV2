@@ -174,6 +174,23 @@ export function composeName(person: {
 }
 
 /**
+ * **The name last name first, for a list ordered by last name** (decision 0515): *Aquino, Tomas
+ * R.*, the middle name as its initial (decision 0375) and a title, where there is one, before the
+ * given name, where decision 0271 puts it. The school's lists show it in their name column.
+ */
+export function composeListName(person: {
+  title?: string | null;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+}): string {
+  const given = [person.title ?? null, person.first_name, middleInitial(person.middle_name)]
+    .filter((part): part is string => part !== null && part.trim() !== '')
+    .join(' ');
+  return `${person.last_name}, ${given}`;
+}
+
+/**
  * The name with the middle name whole, for the person's own record (decision 0375): where
  * somebody looks at one person, the middle name, often the mother's surname, is what tells
  * two people of one name apart.

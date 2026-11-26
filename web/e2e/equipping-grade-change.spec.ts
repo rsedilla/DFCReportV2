@@ -75,9 +75,10 @@ test('the Registrar is offered no change', async ({ page }) => {
 
 test('on a phone each card offers the change', async ({ page }) => {
   await open(page, 390);
-  // *Not passed* first, as the table puts what needs a look first (decision 0508).
+  // From A to Z by last name (decision 0515): Tomas Aquino's card is first; the dialog's title
+  // reads the name as everywhere else.
   await page.getByRole('button', { name: 'Change lessons…' }).first().click();
-  await expect(page.getByRole('dialog', { name: 'Change Imelda Tolentino’s lessons' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Change Tomas Aquino’s lessons' })).toBeVisible();
 });
 
 test('says an Encounter changed after posting before the grade, and what a reopening does (points 10 and 14)', async ({

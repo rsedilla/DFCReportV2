@@ -17,6 +17,7 @@ import {
   type EncounterSign,
   type FinalGrade,
   type GradesStatus,
+  listName,
 } from '@/lib/equipping';
 import { cn } from '@/lib/utils';
 
@@ -27,8 +28,6 @@ const WORDS: Record<FinalGrade, string> = {
   NOT_YET: 'Not yet',
 };
 const ICON: Record<FinalGrade, string> = { PASSED: '✓', NOT_PASSED: '✗', NOT_YET: '…' };
-/** What needs a look first, as Google Classroom puts missing work in front (decision 0508). */
-const ORDER: Record<FinalGrade, number> = { NOT_PASSED: 0, NOT_YET: 1, PASSED: 2 };
 const SIGNS: Record<EncounterSign, { sign: string; words: string }> = {
   CAME: { sign: '✓', words: 'came' },
   MADE_UP: { sign: 'M', words: 'made up' },
@@ -177,13 +176,9 @@ export function GradesPanel({
   const changes = data.may_change === true && onChange !== undefined;
   const postedAt = data.status.posted?.at ?? null;
   const { status } = data;
-  const rows = [...data.students]
-    .filter((s) => filter === 'ALL' || s.grade === filter)
-    .sort(
-      (a, b) =>
-        ORDER[a.grade] - ORDER[b.grade] ||
-        (a.person.full_name ?? '').localeCompare(b.person.full_name ?? ''),
-    );
+  // Straight from A to Z by last name, as the API sends them (decision 0515); the pills pick out
+  // who needs a look.
+  const rows = data.students.filter((s) => filter === 'ALL' || s.grade === filter);
   const chips: { key: FinalGrade | 'ALL'; label: string }[] = [
     { key: 'ALL', label: `All · ${data.students.length}` },
     { key: 'NOT_PASSED', label: `Not passed · ${status.counts.not_passed}` },
@@ -305,7 +300,7 @@ export function GradesPanel({
                           scope="row"
                           className="bg-surface sticky left-0 px-3 py-2 text-left font-semibold whitespace-nowrap"
                         >
-                          {s.person.full_name}
+                          {listName(s.person)}
                           {coordinatorView && s.your_disciple ? (
                             <span className="text-muted block text-xs font-normal">Your disciple: the Admin checks</span>
                           ) : null}
@@ -367,7 +362,7 @@ export function GradesPanel({
             {rows.map((s) => (
               <li key={s.enrollment_id} className="border-line rounded-lg border px-3 py-2">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="font-semibold">{s.person.full_name}</span>
+                  <span className="font-semibold">{listName(s.person)}</span>
                   <GradeTag grade={s.grade} />
                 </div>
                 {coordinatorView && s.your_disciple ? (

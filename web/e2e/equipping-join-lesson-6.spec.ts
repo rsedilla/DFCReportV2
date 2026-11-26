@@ -82,7 +82,7 @@ test('the register names the kept lessons and leaves them off lessons 1 to 4', a
   // Lesson 3 is open: Ramil is not on its tick list, and the line says why.
   await expect(page.getByRole('checkbox', { name: /Ramil Cruz/ })).toHaveCount(0);
   await expect(page.getByText('Joined at Lesson 6, keeping lessons 1 to 4 from an earlier class: Ramil Cruz.')).toBeVisible();
-  const row = page.getByRole('row', { name: /Ramil Cruz/ });
+  const row = page.getByRole('row', { name: /Cruz, Ramil/ });
   await expect(row).toContainText('Joins at Lesson 6 · L1 to L4 and ENC kept from Life Class B, Term 2, 2026');
   await expect(row).not.toContainText('Moved from');
 });
