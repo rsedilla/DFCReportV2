@@ -24,6 +24,7 @@ import {
   setMovesPeople,
   setCoordinatesLifeClass,
   setCoordinatesSol1,
+  setCoordinatesSol2,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
@@ -125,12 +126,15 @@ export function PersonAccount({
         current.moves_people ? 'Moves people' : null,
         current.coordinates_life_class && !leaderAccountsOnly ? 'Life Class Coordinator' : null,
         current.coordinates_sol_1 && !leaderAccountsOnly ? 'SOL 1 Coordinator' : null,
+        current.coordinates_sol_2 && !leaderAccountsOnly ? 'SOL 2 Coordinator' : null,
       ].filter((tick): tick is string => tick !== null)
     : [];
   const heldByTheAdmin =
     otherTicks.length > 0 ||
     (leaderAccountsOnly &&
-      (current?.coordinates_life_class === true || current?.coordinates_sol_1 === true));
+      (current?.coordinates_life_class === true ||
+        current?.coordinates_sol_1 === true ||
+        current?.coordinates_sol_2 === true));
 
   // Side by side only where the page itself widens (decision 0462).
   return (
@@ -376,6 +380,18 @@ export function PersonAccount({
                       shown
                         ? `${firstName} opens the church's SOL 1 classes and names their Teachers, under Classes.`
                         : `${firstName} does not coordinate SOL 1.`
+                    }
+                  />
+                  <LeaderTickRow
+                    personId={personId}
+                    field="coordinates_sol_2"
+                    label="SOL 2 Coordinator"
+                    value={current.coordinates_sol_2 === true}
+                    save={(next) => setCoordinatesSol2(current.id, next, crypto.randomUUID())}
+                    describe={(shown) =>
+                      shown
+                        ? `${firstName} coordinates SOL 2. Its classes open under Classes once DREAMS has SOL 2’s register and final grades.`
+                        : `${firstName} does not coordinate SOL 2.`
                     }
                   />
                 </>
@@ -736,7 +752,13 @@ function LeaderTickRow({
   locked,
 }: {
   personId: string;
-  field: 'full_view' | 'approves_cells' | 'moves_people' | 'coordinates_life_class' | 'coordinates_sol_1';
+  field:
+    | 'full_view'
+    | 'approves_cells'
+    | 'moves_people'
+    | 'coordinates_life_class'
+    | 'coordinates_sol_1'
+    | 'coordinates_sol_2';
   label: string;
   value: boolean;
   save: (next: boolean) => Promise<Record<string, unknown>>;

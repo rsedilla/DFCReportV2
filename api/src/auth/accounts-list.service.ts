@@ -38,6 +38,8 @@ export interface AccountListRow {
   coordinates_life_class: boolean;
   /** SOL 1 Coordinator (decision 0514). */
   coordinates_sol_1: boolean;
+  /** SOL 2 Coordinator (decision 0516). */
+  coordinates_sol_2: boolean;
 }
 
 type Eb = ExpressionBuilder<Database, 'accounts'>;
@@ -64,7 +66,7 @@ export class AccountsListService {
    */
   async coordinators(): Promise<
     {
-      level: 'LIFE_CLASS' | 'SOL_1';
+      level: 'LIFE_CLASS' | 'SOL_1' | 'SOL_2';
       people: { account_id: string; person_id: string; name: string }[];
     }[]
   > {
@@ -76,6 +78,7 @@ export class AccountsListService {
         'accounts.person_id as person_id',
         'accounts.coordinates_life_class as coordinates_life_class',
         'accounts.coordinates_sol_1 as coordinates_sol_1',
+        'accounts.coordinates_sol_2 as coordinates_sol_2',
         'persons.title as title',
         'persons.first_name as first_name',
         'persons.middle_name as middle_name',
@@ -87,6 +90,7 @@ export class AccountsListService {
         eb.or([
           eb('accounts.coordinates_life_class', '=', true),
           eb('accounts.coordinates_sol_1', '=', true),
+          eb('accounts.coordinates_sol_2', '=', true),
         ]),
       )
       .where((eb) =>
@@ -111,6 +115,7 @@ export class AccountsListService {
     return [
       { level: 'LIFE_CLASS', people: rows.filter((row) => row.coordinates_life_class).map(shape) },
       { level: 'SOL_1', people: rows.filter((row) => row.coordinates_sol_1).map(shape) },
+      { level: 'SOL_2', people: rows.filter((row) => row.coordinates_sol_2).map(shape) },
     ];
   }
 
@@ -147,6 +152,7 @@ export class AccountsListService {
         'accounts.moves_people as moves_people',
         'accounts.coordinates_life_class as coordinates_life_class',
         'accounts.coordinates_sol_1 as coordinates_sol_1',
+        'accounts.coordinates_sol_2 as coordinates_sol_2',
         'persons.member_id as member_id',
         'persons.title as title',
         'persons.first_name as first_name',
@@ -251,6 +257,7 @@ export class AccountsListService {
         moves_people: row.moves_people,
         coordinates_life_class: row.coordinates_life_class,
         coordinates_sol_1: row.coordinates_sol_1,
+        coordinates_sol_2: row.coordinates_sol_2,
       })),
       nextCursor:
         found.length > limit && last !== undefined

@@ -25,7 +25,7 @@ import { IsManilaCalendarDate } from '../../common/time/is-manila-calendar-date'
 import type { EquippingLevel } from '../../database/schema';
 
 /** The levels the school runs (SKILL.md section 29, decisions 0499 and 0514). */
-export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
+export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1', 'SOL_2'];
 
 /** A level alone, for a read that names one: the registration form, the Guide search. */
 export class EquippingLevelDto {

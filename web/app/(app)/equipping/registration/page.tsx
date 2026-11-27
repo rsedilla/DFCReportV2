@@ -15,6 +15,7 @@ import {
   EQUIPPING_LEVELS,
   LEVEL_LABELS,
   REQUIREMENT_LABELS,
+  SOL_TICKED,
   STATUS_LABELS,
   cancelRegistration,
   currentTerm,
@@ -263,11 +264,13 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
     queryFn: ({ signal }) => getCandidate(person!.id, term.level, signal),
     enabled: person !== null,
   });
-  const sol = term.level !== 'LIFE_CLASS';
-  // SOL 1's manual is its third requirement, ticked in its own row, and warns (decision 0514).
+  const solTicked = term.level === 'LIFE_CLASS' ? null : SOL_TICKED[term.level];
+  const sol = solTicked !== null;
+  // A SOL level's manual or book is its third requirement, ticked in its own row, and warns
+  // (decisions 0514 and 0516).
   const unmet = [
     ...(candidate.data?.requirements ?? []).filter((each) => !each.met),
-    ...(sol && !manual ? [{ code: 'SOL_1_MANUAL' as const }] : []),
+    ...(solTicked !== null && !manual ? [{ code: solTicked.code }] : []),
   ];
   const total = (candidate.data?.requirements.length ?? 0) + (sol ? 1 : 0);
   const ticked = sol || (bible && manual);
@@ -322,8 +325,8 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
     >
       <p className="text-muted text-sm">
         {termLabel(term)} &middot;{' '}
-        {sol
-          ? `the ${LEVEL_LABELS[term.level]} manual is the tuition, paid outside DREAMS`
+        {solTicked !== null
+          ? `the ${LEVEL_LABELS[term.level]} ${solTicked.item} is the tuition, paid outside DREAMS`
           : 'fees and the manual are paid outside DREAMS'}
       </p>
 
@@ -427,7 +430,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
                     </span>
                   </li>
                 ))}
-                {sol ? (
+                {solTicked !== null ? (
                   <li className="border-line flex gap-3 px-3 py-2">
                     <input
                       id="sol-manual"
@@ -437,7 +440,7 @@ function RegisterDialog({ term, open, onClose }: { term: Term; open: boolean; on
                       onChange={(event) => setManual(event.target.checked)}
                     />
                     <label htmlFor="sol-manual">
-                      <span className="font-semibold">{REQUIREMENT_LABELS.SOL_1_MANUAL}</span>
+                      <span className="font-semibold">{REQUIREMENT_LABELS[solTicked.code]}</span>
                       <span className={manual ? 'text-muted block text-sm' : 'text-field-invalid block text-sm'}>
                         {manual ? `Ticked by you, ${today}` : 'Not met · tick when they have it'}
                       </span>

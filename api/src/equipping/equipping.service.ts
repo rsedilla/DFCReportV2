@@ -125,11 +125,34 @@ function decodeCursor(cursor: string | undefined): RegistrationCursor | null {
   });
 }
 
+/**
+ * The levels whose classes may be opened (decision 0516, point 4): SOL 2 signs people up before
+ * its register and final grades exist, and its classes wait for them.
+ */
+const LEVELS_THAT_OPEN: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
+
 /** Each level's name in words, for a refusal or a line on a screen. */
 export const LEVEL_NAMES: Record<EquippingLevel, string> = {
   LIFE_CLASS: 'Life Class',
   SOL_1: 'SOL 1',
+  SOL_2: 'SOL 2',
 };
+
+/**
+ * **Who may guide a level: one level ahead** (decision 0501, point 4; decision 0516): SOL 1
+ * passed guides Life Class, SOL 2 passed guides SOL 1 or Life Class, and SOL 3 passed guides any
+ * level below it. Lowest first.
+ */
+export function guidingPrograms(level: EquippingLevel): readonly ('SOL_1' | 'SOL_2' | 'SOL_3')[] {
+  switch (level) {
+    case 'LIFE_CLASS':
+      return ['SOL_1', 'SOL_2', 'SOL_3'];
+    case 'SOL_1':
+      return ['SOL_2', 'SOL_3'];
+    case 'SOL_2':
+      return ['SOL_3'];
+  }
+}
 
 /**
  * How many Guides a SOL class needs for this many students of one sex (decision 0501, point 8):
@@ -297,8 +320,8 @@ export class EquippingService {
 
   /**
    * The record requirements for each person at a level, read as things stand now: Life Class's
-   * four (decision 0499, point 6), or SOL 1's two read from the records (decision 0514), its
-   * third, the manual, being the Registrar's tick on the form.
+   * four (decision 0499, point 6), or SOL 1's or SOL 2's two read from the records (decisions
+   * 0514 and 0516), the third, the manual or the book, being the Registrar's tick on the form.
    */
   async requirementsOf(
     personIds: readonly string[],
@@ -306,6 +329,9 @@ export class EquippingService {
   ): Promise<Map<string, RequirementCheck[]>> {
     if (level === 'SOL_1') {
       return this.sol1RequirementsOf(personIds);
+    }
+    if (level === 'SOL_2') {
+      return this.sol2RequirementsOf(personIds);
     }
     const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
     const [leaders, leaderNames, standing, lessons] = await Promise.all([
@@ -430,6 +456,72 @@ export class EquippingService {
   }
 
   /**
+   * **SOL 2's two record requirements** (decision 0501, point 18; decision 0516): SOL 1 passed,
+   * by a posted grade of the school or a pass recorded before it (point 19), both of which
+   * Training holds, and the leadership of an `ACTIVE` Cell now (section 11's current Cell
+   * Leader), which a Cell closed for any reason, `CREATED_IN_ERROR` included, does not give. Read
+   * once, at registration, and never again in the term.
+   */
+  private async sol2RequirementsOf(
+    personIds: readonly string[],
+  ): Promise<Map<string, RequirementCheck[]>> {
+    const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
+    const [passed, leaders, cells, posted] = await Promise.all([
+      this.training.holdersOfAny(ids, ['SOL_1']),
+      this.cells.currentCellLeaderIds(ids),
+      this.cells.currentCellsOfMany(ids),
+      ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            // The grade as it stands, a change after posting included (decision 0513).
+            .selectFrom('equipping_current_grades as g')
+            .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+            .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
+            .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
+            .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
+            .select(['r.person_id', 'c.name', 'r.term_year', 'r.term_number'])
+            .where('g.grade', '=', 'PASSED')
+            .where('r.level', '=', 'SOL_1')
+            .where('r.person_id', 'in', ids)
+            .orderBy('p.posted_at')
+            .execute(),
+    ]);
+    const passedIn = new Map(
+      posted.map((row) => [
+        canonicalId(row.person_id),
+        `Passed ${row.name}, Term ${row.term_number}, ${row.term_year}`,
+      ]),
+    );
+    const leading = new Set([...leaders].map((id) => canonicalId(id)));
+    return new Map(
+      ids.map((id) => {
+        const codes = (cells.get(id)?.leads ?? []).map((cell) => cell.cellId).sort();
+        return [
+          id,
+          [
+            {
+              code: 'SOL_1_PASSED' as const,
+              met: passed.has(id),
+              detail: passed.has(id)
+                ? (passedIn.get(id) ?? 'SOL 1 passed')
+                : 'SOL 1 not passed yet',
+            },
+            {
+              code: 'LEADS_A_CELL' as const,
+              met: leading.has(id),
+              detail: leading.has(id)
+                ? codes.length > 0
+                  ? `Leads ${codes.join(', ')}`
+                  : 'Leads a Cell'
+                : 'leads no Cell now',
+            },
+          ],
+        ];
+      }),
+    );
+  }
+
+  /**
    * One person as the registration form shows them: who they are, their leader and Cell, their
    * birthday, and the four record requirements.
    */
@@ -524,10 +616,7 @@ export class EquippingService {
     const passed =
       who === 'guides'
         ? await Promise.all(
-            (level === 'LIFE_CLASS'
-              ? (['SOL_3', 'SOL_2', 'SOL_1'] as const)
-              : (['SOL_3', 'SOL_2'] as const)
-            ).map(async (passed) => ({
+            [...guidingPrograms(level)].reverse().map(async (passed) => ({
               level: passed,
               holders: await this.training.holdersOfAny(ids, [passed]),
             })),
@@ -1052,7 +1141,8 @@ export class EquippingService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     // Two ticks since the owner withdrew the devotion tick on 2026-11-18 (decision 0499, point 6).
-    // SOL 1 has no Bible tick, and its manual warns rather than refuses (decision 0514).
+    // SOL has no Bible tick, and its manual or book warns rather than refuses (decisions 0514
+    // and 0516).
     if (body.level === 'LIFE_CLASS') {
       for (const field of ['bible_confirmed', 'manual_confirmed'] as const) {
         if (body[field] !== true) {
@@ -1081,6 +1171,9 @@ export class EquippingService {
       .map((check) => check.code);
     if (body.level === 'SOL_1' && !body.manual_confirmed) {
       unmet.push('SOL_1_MANUAL');
+    }
+    if (body.level === 'SOL_2' && !body.manual_confirmed) {
+      unmet.push('SOL_2_BOOK');
     }
     const reason = body.exception_reason?.trim() || null;
     if (unmet.length > 0 && reason === null) {
@@ -1232,6 +1325,16 @@ export class EquippingService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     await this.assertCoordinatesLevel(actor, body.level);
+    // **No SOL 2 class opens before its register and final grades exist** (owner, 2026-11-27,
+    // decision 0516 point 4), for the Admin too: signing up for SOL 2 is open, its classes wait
+    // for the second step, which removes this refusal. Migration 0064 refuses one too.
+    if (!LEVELS_THAT_OPEN.includes(body.level)) {
+      throw new InvariantViolationError(
+        `A ${LEVEL_NAMES[body.level]} class can be opened once DREAMS has ` +
+          `${LEVEL_NAMES[body.level]}’s register and final grades.`,
+        { field: 'level' },
+      );
+    }
     const teacher =
       body.teacher_person_id === undefined ? null : await this.teacherOf(body.teacher_person_id);
     // Life Class names its Encounter weekend; SOL has no Encounter (decision 0514).
@@ -1631,9 +1734,9 @@ export class EquippingService {
       const may = await this.mayGuideWithin(trx, [id], cls.level);
       if (!may.has(id)) {
         throw new InvariantViolationError(
-          cls.level === 'LIFE_CLASS'
-            ? 'A Life Class Guide has passed SOL 1 and is in the tree (SKILL.md section 29).'
-            : 'A SOL 1 Guide has passed SOL 2 and is in the tree (SKILL.md section 29).',
+          `A ${LEVEL_NAMES[cls.level]} Guide has passed ` +
+            `${guidingPrograms(cls.level)[0].replace('_', ' ')} and is in the tree ` +
+            '(SKILL.md section 29).',
           { field: 'person_id' },
         );
       }
@@ -1835,12 +1938,7 @@ export class EquippingService {
     among: readonly string[] | null,
     level: EquippingLevel,
   ): Promise<Set<string>> {
-    // One level ahead (decision 0501, point 4): SOL 1 passed guides Life Class, SOL 2 SOL 1.
-    const programs =
-      level === 'LIFE_CLASS'
-        ? (['SOL_1', 'SOL_2', 'SOL_3'] as const)
-        : (['SOL_2', 'SOL_3'] as const);
-    const passed = await this.training.holdersOfAny(among, programs);
+    const passed = await this.training.holdersOfAny(among, guidingPrograms(level));
     const inTree = await this.hierarchy.withOpenAssignment([...passed], executor);
     const records = await this.people.equippingAccountPersons();
     return new Set([...inTree].filter((id) => !records.has(canonicalId(id))));

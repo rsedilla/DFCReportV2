@@ -55,8 +55,19 @@ export type CoordinatesSol1Body = {
   coordinates_sol_1: boolean;
 };
 
+/** What setting SOL 2 Coordinator answers: the account's value after the change. */
+export type CoordinatesSol2Body = {
+  id: string;
+  coordinates_sol_2: boolean;
+};
+
 type LeaderTick =
-  'full_view' | 'approves_cells' | 'moves_people' | 'coordinates_life_class' | 'coordinates_sol_1';
+  | 'full_view'
+  | 'approves_cells'
+  | 'moves_people'
+  | 'coordinates_life_class'
+  | 'coordinates_sol_1'
+  | 'coordinates_sol_2';
 
 /** Each tick's name in a refusal and its audit action (decisions 0323, 0352 and 0356). */
 const TICKS: Record<LeaderTick, { label: string; action: AuditAction }> = {
@@ -68,14 +79,19 @@ const TICKS: Record<LeaderTick, { label: string; action: AuditAction }> = {
     action: 'account.coordinates_life_class_changed',
   },
   coordinates_sol_1: { label: 'SOL 1 Coordinator', action: 'account.coordinates_sol_1_changed' },
+  coordinates_sol_2: { label: 'SOL 2 Coordinator', action: 'account.coordinates_sol_2_changed' },
 };
 
-/** The ticks offered only with Full view, and cleared with it (decisions 0352, 0356, 0501, 0514). */
+/**
+ * The ticks offered only with Full view, and cleared with it (decisions 0352, 0356, 0501, 0514
+ * and 0516).
+ */
 const NEEDS_FULL_VIEW: readonly Exclude<LeaderTick, 'full_view'>[] = [
   'approves_cells',
   'moves_people',
   'coordinates_life_class',
   'coordinates_sol_1',
+  'coordinates_sol_2',
 ];
 
 /**
@@ -424,6 +440,25 @@ export class AccountAccessService {
     )) as unknown as CoordinatesSol1Body;
   }
 
+  /**
+   * Ticks or clears SOL 2 Coordinator on a Leader account (sections 7 and 29, decision 0516),
+   * exactly as the SOL 1 tick is.
+   */
+  async setCoordinatesSol2(
+    accountId: string,
+    coordinates: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<CoordinatesSol2Body> {
+    return (await this.setLeaderTick(
+      'coordinates_sol_2',
+      accountId,
+      coordinates,
+      actor,
+      claim,
+    )) as unknown as CoordinatesSol2Body;
+  }
+
   /** The one write the ticks share: lock, check the role, write and audit a change. */
   private async setLeaderTick(
     column: LeaderTick,
@@ -445,6 +480,7 @@ export class AccountAccessService {
           'moves_people',
           'coordinates_life_class',
           'coordinates_sol_1',
+          'coordinates_sol_2',
         ])
         .where('id', '=', accountId)
         .forNoKeyUpdate()

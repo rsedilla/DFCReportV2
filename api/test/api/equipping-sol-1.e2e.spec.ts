@@ -317,7 +317,7 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       const read = await get(admin, 'accounts/coordinators').expect(200);
       const levels = (read.body as { data: { level: string; people: { account_id: string }[] }[] })
         .data;
-      expect(levels.map((each) => each.level)).toEqual(['LIFE_CLASS', 'SOL_1']);
+      expect(levels.map((each) => each.level)).toEqual(['LIFE_CLASS', 'SOL_1', 'SOL_2']);
       expect(levels[0].people.map((each) => each.account_id).sort()).toEqual(
         [lifeClassCoordinator.id, bothCoordinator.id].sort(),
       );
@@ -585,7 +585,7 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
     it('a Registrar coordinates no level, though it holds equipping.manage', async () => {
       await get(registrar, 'equipping/coordinate/levels').expect(403);
       const admin_ = await get(admin, 'equipping/coordinate/levels').expect(200);
-      expect((admin_.body as { data: string[] }).data).toEqual(['LIFE_CLASS', 'SOL_1']);
+      expect((admin_.body as { data: string[] }).data).toEqual(['LIFE_CLASS', 'SOL_1', 'SOL_2']);
       const sol = await get(solCoordinator, 'equipping/coordinate/levels').expect(200);
       expect((sol.body as { data: string[] }).data).toEqual(['SOL_1']);
     });
@@ -686,7 +686,7 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
         registrar,
         'equipping/registrations/counts?term_year=2027&term_number=1',
       ).expect(200);
-      expect(counts.body).toEqual({ LIFE_CLASS: 0, SOL_1: 1 });
+      expect(counts.body).toEqual({ LIFE_CLASS: 0, SOL_1: 1, SOL_2: 0 });
     });
 
     it('opens a SOL 1 class’s register, and lists it on Final Grades, not ready', async () => {

@@ -25,6 +25,7 @@ import {
   SetMovesPeopleDto,
   SetCoordinatesLifeClassDto,
   SetCoordinatesSol1Dto,
+  SetCoordinatesSol2Dto,
 } from './dto/credentials.dto';
 import { AccountsListDto } from './dto/accounts-list.dto';
 
@@ -402,5 +403,22 @@ export class AccountsController {
   ): Promise<Record<string, unknown>> {
     await this.assertTicksAtWholeChurch(actor);
     return { ...(await this.access.setCoordinatesSol1(id, body.coordinates_sol_1, actor, claim)) };
+  }
+
+  /**
+   * Ticks or clears SOL 2 Coordinator on a Leader account (sections 7 and 29, decision 0516),
+   * as the SOL 1 tick is, and only by the Admin.
+   */
+  @Post(':id/coordinates-sol-2')
+  @HttpCode(HttpStatus.OK)
+  @RequiresCapability(Capability.RolesManage, { kind: 'account', from: 'params.id' })
+  async setCoordinatesSol2(
+    @Param('id') id: string,
+    @Body() body: SetCoordinatesSol2Dto,
+    @CurrentActor() actor: Actor,
+    @CurrentIdempotency() claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    await this.assertTicksAtWholeChurch(actor);
+    return { ...(await this.access.setCoordinatesSol2(id, body.coordinates_sol_2, actor, claim)) };
   }
 }
