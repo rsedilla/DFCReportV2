@@ -527,7 +527,14 @@ export function mockTraining(
   page: Page,
   outcome: 'accepted' | 'conflict' = 'accepted',
   // The Admin's by default, who alone ticks the Encounter and Life Class (decision 0509).
-  fixture: { counts?: unknown; rows?: unknown[]; schoolMayTick?: boolean; sol1FromSchool?: boolean } = {},
+  fixture: {
+    counts?: unknown;
+    rows?: unknown[];
+    schoolMayTick?: boolean;
+    sol1FromSchool?: boolean;
+    /** SOL 2 the school's too, as once a SOL 2 class has opened (decision 0516, point 1). */
+    sol2FromSchool?: boolean;
+  } = {},
 ): Promise<GrowthTraffic> {
   return mockTab(
     page,
@@ -538,7 +545,12 @@ export function mockTraining(
     {
       school_may_tick: fixture.schoolMayTick ?? true,
       // SOL 1 is the school's once a SOL 1 class has opened (decision 0514, point 13).
-      school_programs: fixture.sol1FromSchool ? ['ENCOUNTER', 'LIFE_CLASS', 'SOL_1'] : ['ENCOUNTER', 'LIFE_CLASS'],
+      school_programs: [
+        'ENCOUNTER',
+        'LIFE_CLASS',
+        ...(fixture.sol1FromSchool ? ['SOL_1'] : []),
+        ...(fixture.sol2FromSchool ? ['SOL_2'] : []),
+      ],
     },
   );
 }

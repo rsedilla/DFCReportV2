@@ -1102,7 +1102,7 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
       { path: `/api/v1/accounts/${ACCOUNT_ID}/coordinates-sol-2`, body: { coordinates_sol_2: true } },
     ]);
     await expect(
-      page.getByText('Marilou coordinates SOL 2. Its classes open under Classes once DREAMS has SOL 2’s register and final grades.'),
+      page.getByText("Marilou opens the church's SOL 2 classes and names their Teachers, under Classes."),
     ).toBeVisible();
   });
 

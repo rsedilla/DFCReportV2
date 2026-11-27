@@ -2,10 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { type Kysely, type Transaction } from 'kysely';
 
 import { lifeClassFiledOf } from './life-class-from-school';
-import { shareSol1OpeningWithin } from './sol-1-opening';
+import { shareSolOpeningWithin } from './sol-opening';
 
 import type { Database } from '../database/schema';
-import type { SchoolEvidence, SchoolEvidencePort } from '../training/school-evidence.port';
+import type {
+  SchoolEvidence,
+  SchoolEvidencePort,
+  SchoolProgram,
+  SolLevel,
+} from '../training/school-evidence.port';
 
 /**
  * `equipping`'s answer to what the school recorded for a person (decision 0509, point 8), behind
@@ -17,21 +22,22 @@ import type { SchoolEvidence, SchoolEvidencePort } from '../training/school-evid
  * - **Life Class**: what the school's Life Class stands filed under for each posted grade
  *   (`lifeClassFiledOf`): the day a grade became *Passed*, at posting or by a change after it
  *   (decision 0513), or the weekend a posted *Not yet* passed at; nothing for a pass changed away;
- * - **SOL 1**: a *Passed* in a SOL 1 class, dated the day it was posted, or the day a change
- *   after posting made it so (decision 0514, points 12 and 13). SOL has no *Not yet*.
+ * - **SOL 1 and SOL 2**: a *Passed* in a class of that level, dated the day it was posted, or the
+ *   day a change after posting made it so (decision 0514, points 12 and 13; decision 0516). SOL
+ *   has no *Not yet*.
  */
 @Injectable()
 export class SchoolEvidenceAdapter implements SchoolEvidencePort {
   async evidenceWithin(
     trx: Transaction<Database>,
     personIds: readonly string[],
-    program: 'ENCOUNTER' | 'LIFE_CLASS' | 'SOL_1',
+    program: SchoolProgram,
   ): Promise<SchoolEvidence[]> {
     if (personIds.length === 0) {
       return [];
     }
 
-    if (program === 'SOL_1') {
+    if (program === 'SOL_1' || program === 'SOL_2') {
       const passed = await trx
         .selectFrom('equipping_current_grades as g')
         .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
@@ -39,7 +45,7 @@ export class SchoolEvidenceAdapter implements SchoolEvidencePort {
         .innerJoin('equipping_enrollments as e', 'e.id', 'g.enrollment_id')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
         .select(['p.posted_at', 'g.life_class_filed_at'])
-        .where('c.level', '=', 'SOL_1')
+        .where('c.level', '=', program)
         .where('g.grade', '=', 'PASSED')
         .where('r.person_id', 'in', [...personIds])
         .execute();
@@ -79,18 +85,20 @@ export class SchoolEvidenceAdapter implements SchoolEvidencePort {
     );
   }
 
-  async shareSol1OpeningWithin(trx: Transaction<Database>): Promise<void> {
-    await shareSol1OpeningWithin(trx);
+  async shareSolOpeningWithin(trx: Transaction<Database>): Promise<void> {
+    await shareSolOpeningWithin(trx);
   }
 
-  async runsSol1(executor: Kysely<Database> | Transaction<Database>): Promise<boolean> {
+  async solLevelsRun(
+    executor: Kysely<Database> | Transaction<Database>,
+  ): Promise<ReadonlySet<SolLevel>> {
     const open = await executor
       .selectFrom('equipping_classes')
-      .select('id')
-      .where('level', '=', 'SOL_1')
+      .select('level')
+      .distinct()
+      .where('level', 'in', ['SOL_1', 'SOL_2'])
       .where('cancelled_at', 'is', null)
-      .limit(1)
-      .executeTakeFirst();
-    return open !== undefined;
+      .execute();
+    return new Set(open.map((row) => row.level as SolLevel));
   }
 }

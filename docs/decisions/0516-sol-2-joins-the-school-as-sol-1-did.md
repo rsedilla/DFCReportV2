@@ -49,4 +49,16 @@ Account view, offered and kept only with Full view, which the database holds too
 *Coordinators* list carries a SOL 2 row. No SOL 2 class opens yet (point 4); when one does, it
 names no Encounter weekend and its Guide has passed SOL 3.
 
+**The second step is built** (migration `0065_equipping_sol_2_school.sql`), from screenshots the
+owner approved on 2026-11-27: *Classes* at SOL 2 offers *Open a class* again, and the database
+admits a SOL 2 class, the refusals of point 4 removed. A SOL 2 class's register, quiz and book,
+final grades, checked and posted, and the Admin's change after posting are SOL 1's, a SOL 2 lesson
+ticking the memory verse and devotional as a SOL 1 lesson does; a posted *Passed* files SOL 2 in
+Training *From the school*, and a change after posting files or withdraws it. Once a SOL 2 class has
+opened, a cancelled one not counting, leaders no longer tick SOL 2 (point 1): the Training tab tells
+a leader "You tick SOL 3. The Encounter, Life Class, SOL 1 and SOL 2 now come from the school.", and
+the Admin "You can tick the Encounter, Life Class, SOL 1 and SOL 2 only for someone who finished
+before the school." One advisory lock serves every SOL level, so a leader's tick never lands after a
+SOL 1 or SOL 2 class opened. A leader's *SOL 2* tab carries the SOL 1 card.
+
 Previous: [2026-11-25 — The school's lists are in last-name order, each name shown last name first](0515-the-schools-lists-are-in-last-name-order.md)

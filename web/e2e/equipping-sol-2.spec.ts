@@ -2,17 +2,24 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { mockAccountsAdministrator, mockAdminArea, mockCoordinator, mockSignedIn } from './mock-api';
 import {
+  ATTENDANCE_IDS,
   mockCandidate,
   mockCoordinatedClasses,
   mockEquipping,
+  mockFinalGrades,
+  mockMyClasses,
   mockRegistrar,
   mockRegistrationSearch,
+  mockSolAttendance,
+  mockSolFinalGrades,
+  mockTeacher,
 } from './mock-equipping';
 
 /**
- * SOL 2 in the school's screens (SKILL.md section 29, decision 0516), the first step: the Admin's
- * Coordinators list, the SOL 2 pill on Registration and Classes, and SOL 2's three requirements on
- * the Register form, the book being the tuition. Every name is invented.
+ * SOL 2 in the school's screens (SKILL.md section 29, decision 0516): the Admin's Coordinators
+ * list, the SOL 2 pill on Registration, Classes and Final Grades, SOL 2's three requirements on the
+ * Register form, the book being the tuition, opening a SOL 2 class, and its Teacher's register.
+ * Every name is invented.
  */
 
 function json(body: unknown, status = 200) {
@@ -117,7 +124,7 @@ test('the SOL 2 form reads SOL 1 passed and a Cell led, ticks the book, and warn
   expect(sent[0]).not.toHaveProperty('bible_confirmed');
 });
 
-test('a Coordinator of SOL 1 and SOL 2 picks between them, and SOL 2 offers no Open a class yet', async ({
+test('a Coordinator of SOL 1 and SOL 2 picks between them, and opens a SOL 2 class with no Encounter', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -135,35 +142,53 @@ test('a Coordinator of SOL 1 and SOL 2 picks between them, and SOL 2 offers no O
   await expect(level.getByRole('button')).toHaveText(['SOL 1', 'SOL 2']);
   await level.getByRole('button', { name: 'SOL 2' }).click();
   await expect(page.getByText('SOL 2, which you coordinate.')).toBeVisible();
-  // No SOL 2 class opens before its register and final grades exist (decision 0516, point 4).
-  await expect(page.getByRole('button', { name: 'Open a class' })).toHaveCount(0);
-  await expect(
-    page.getByText(
-      'A SOL 2 class can be opened once DREAMS has SOL 2’s register and final grades. Signing up for SOL 2 is open now.',
-    ),
-  ).toBeVisible();
+  await expect(page.getByText(/No SOL 2 class is open in Term/)).toBeVisible();
 
-  // SOL 1 still opens one.
-  await level.getByRole('button', { name: 'SOL 1' }).click();
-  await expect(page.getByRole('button', { name: 'Open a class' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open a class' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Open a class' });
+  await expect(dialog).toContainText(/SOL 2, Term/);
+  await expect(dialog.getByLabel('Encounter weekend')).toHaveCount(0);
 });
 
-test('Enrollment at SOL 2 says why no class is open, and Final Grades offers no SOL 2 yet', async ({ page }) => {
+test('Final Grades offers SOL 2 beside Life Class and SOL 1', async ({ page }) => {
   await registrar(page);
-  await page.route('**/api/v1/equipping/classes?*', (route) => {
-    if (!route.request().url().includes('level=SOL_2')) return route.fallback();
-    return route.fulfill(json({ data: [] }));
-  });
-  await page.goto('/equipping/enrollment');
-  await page.getByRole('group', { name: 'Level' }).getByRole('button', { name: /SOL 2/ }).click();
-  // No SOL 2 class opens before step 2 (decision 0516, point 4), so nobody is told to open one.
-  await expect(
-    page.getByText(
-      'A SOL 2 class can be opened once DREAMS has SOL 2’s register and final grades. Signing up for SOL 2 is open now.',
-    ),
-  ).toBeVisible();
-  await expect(page.getByText('Open one under Classes.')).toHaveCount(0);
-
   await page.goto('/equipping/final-grades');
-  await expect(page.getByRole('group', { name: 'Level' }).getByRole('button')).toHaveText([/Life Class/, /SOL 1/]);
+  await expect(page.getByRole('group', { name: 'Level' }).getByRole('button')).toHaveText([
+    /Life Class/,
+    /SOL 1/,
+    /SOL 2/,
+  ]);
+});
+
+test('a SOL 2 class’s Teacher keeps the SOL register: memory verse and devotional with each lesson', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 1100 });
+  await mockSignedIn(page);
+  await mockTeacher(page, 'RECORDING');
+  await mockMyClasses(page);
+  await mockSolAttendance(page, { level: 'SOL_2' });
+  await page.goto(`/equipping/teach/${ATTENDANCE_IDS.classId}`);
+  await expect(page.getByRole('heading', { name: 'SOL 2 A', level: 1 })).toBeVisible();
+  await expect(page.getByText('Memory verse', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Devotional', { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /Quiz and book/ })).toBeVisible();
+});
+
+test('the Admin’s change after posting names SOL 2 as what Training files (decision 0516)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockSignedIn(page);
+  await mockRegistrar(page);
+  await mockFinalGrades(page, 'POSTED');
+  await mockSolFinalGrades(page, { posted: true, level: 'SOL_2' });
+  await page.goto('/equipping/final-grades');
+  await page.getByRole('group', { name: 'Level' }).getByRole('button', { name: /SOL 2/ }).click();
+  await page.getByRole('button', { name: 'Change Nestor Villamor’s record' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Change Nestor Villamor’s record' });
+  await dialog.getByLabel('What to change').selectOption('BOOK');
+  await dialog.getByRole('radio', { name: 'Read', exact: true }).check();
+  await dialog.getByLabel('Details (required)').fill('Read before posting; the Teacher missed the tick.');
+  // What the grade becomes is shown before anything is saved, Training's part with it.
+  await expect(dialog).toContainText('SOL 2 goes into their Training from the school');
+  await expect(dialog).not.toContainText('SOL 1 goes into');
 });

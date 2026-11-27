@@ -18,7 +18,6 @@ import { timeLabel } from '@/lib/cells';
 import {
   DAY_NAMES,
   LEVEL_LABELS,
-  LEVELS_THAT_OPEN,
   listCoordinatorLevels,
   cancelClass,
   correctClass,
@@ -43,7 +42,6 @@ import {
   type FoundPerson,
   type Term,
   listName,
-  notOpenYet,
 } from '@/lib/equipping';
 import { idempotencyKeyFor, useWriteKey } from '@/lib/idempotency';
 import { shortDate } from '@/lib/lifecycle';
@@ -107,8 +105,6 @@ export default function ClassesPage() {
       ? `${LEVEL_LABELS[level]}, which you coordinate with ${others.join(' and ')}.`
       : `${LEVEL_LABELS[level]}, which you coordinate.`;
   const shown = (classes.data?.data ?? []).filter((each) => listedUnder(status, each));
-  // No SOL 2 class opens before its register and final grades exist (decision 0516, point 4).
-  const opens = LEVELS_THAT_OPEN.includes(level);
   // The open dialog reads the class as last listed, so a correction shows at once.
   const editingNow = (editing && classes.data?.data.find((each) => each.id === editing.id)) ?? editing;
 
@@ -133,13 +129,11 @@ export default function ClassesPage() {
             onChange={(next) => setTerm({ ...shownTerm, level: next })}
           />
         ) : null}
-        {opens ? (
-          <div className="lg:ml-auto">
-            <Button type="button" onClick={() => setOpening(true)}>
-              Open a class
-            </Button>
-          </div>
-        ) : null}
+        <div className="lg:ml-auto">
+          <Button type="button" onClick={() => setOpening(true)}>
+            Open a class
+          </Button>
+        </div>
       </div>
       <FailureNotice
         failure={
@@ -152,11 +146,9 @@ export default function ClassesPage() {
       />
       {classes.data && shown.length === 0 ? (
         <p className="text-muted mt-4 text-sm">
-          {!opens
-            ? notOpenYet(level)
-            : !classes.data.data.some((each) => listedUnder('ALL', each)) && status === 'ALL'
-              ? `No ${LEVEL_LABELS[level]} class is open in ${termLabel(term)} yet.`
-              : 'No class has that status.'}
+          {!classes.data.data.some((each) => listedUnder('ALL', each)) && status === 'ALL'
+            ? `No ${LEVEL_LABELS[level]} class is open in ${termLabel(term)} yet.`
+            : 'No class has that status.'}
         </p>
       ) : null}
       {shown.length > 0 ? (

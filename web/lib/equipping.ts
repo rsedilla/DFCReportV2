@@ -11,18 +11,6 @@ export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1' | 'SOL_2';
 /** The levels the school runs, in order (decisions 0499, 0514 and 0516). */
 export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1', 'SOL_2'];
 
-/**
- * The levels whose classes may be opened, enrolled into and graded (decision 0516, point 4): SOL 2
- * signs people up before its register and final grades exist, and its classes wait for them.
- */
-export const LEVELS_THAT_OPEN: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
-
-/** Why a level's classes cannot be opened yet, in the words *Classes* and *Enrollment* show. */
-export function notOpenYet(level: EquippingLevel): string {
-  const name = LEVEL_LABELS[level];
-  return `A ${name} class can be opened once DREAMS has ${name}’s register and final grades. Signing up for ${name} is open now.`;
-}
-
 export const LEVEL_LABELS: Record<EquippingLevel, string> = {
   LIFE_CLASS: 'Life Class',
   SOL_1: 'SOL 1',

@@ -925,8 +925,9 @@ export async function mockFinalGrades(
  */
 export async function mockSolFinalGrades(
   page: Page,
-  options: { posted?: boolean; twoTries?: boolean } = {},
+  options: { posted?: boolean; twoTries?: boolean; level?: 'SOL_1' | 'SOL_2' } = {},
 ): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const solName = options.level === 'SOL_2' ? 'SOL 2' : 'SOL 1';
   const sent: { url: string; body: unknown }[] = [];
   const id = (n: number) => `3f1b7c6e-0000-4000-8000-${String(n).padStart(12, '0')}`;
   const SOL_CLASS = id(9301);
@@ -981,7 +982,14 @@ export async function mockSolFinalGrades(
         }
       : {};
   const grades = {
-    class: { id: SOL_CLASS, name: 'SOL 1 A', level: 'SOL_1', day_of_week: 2, time_of_day: '19:00', place: 'Room 2' },
+    class: {
+      id: SOL_CLASS,
+      name: `${solName} A`,
+      level: options.level ?? 'SOL_1',
+      day_of_week: 2,
+      time_of_day: '19:00',
+      place: 'Room 2',
+    },
     status: status(phase),
     may_check: !options.posted,
     checks_as: 'COORDINATOR',
@@ -1016,10 +1024,11 @@ export async function mockSolFinalGrades(
         lesson: url.searchParams.get('lesson') === null ? null : Number(url.searchParams.get('lesson')),
         grade_before: 'NOT_PASSED',
         reason_before: 'L7 devotional and the book missing.',
-        grade_after: book ? 'NOT_PASSED' : 'NOT_PASSED',
-        reason_after: book ? 'L7 devotional missing.' : 'The book missing.',
+        grade_after: book && options.level === 'SOL_2' ? 'PASSED' : 'NOT_PASSED',
+        reason_after: book && options.level === 'SOL_2' ? 'Every check met.' : book ? 'L7 devotional missing.' : 'The book missing.',
         not_counted: [],
-        training: null,
+        // Reading the book makes the grade a pass in a SOL 2 class, so Training files it.
+        training: book && options.level === 'SOL_2' ? 'FILES' : null,
         encounter_change: null,
         enrollment: null,
       }),
@@ -1030,12 +1039,12 @@ export async function mockSolFinalGrades(
     return route.fulfill(json({ ok: true }, 201));
   });
   await page.route('**/api/v1/equipping/final-grades?*', (route) => {
-    if (!route.request().url().includes('level=SOL_1')) return route.fallback();
+    if (!route.request().url().includes(`level=${options.level ?? 'SOL_1'}`)) return route.fallback();
     return route.fulfill(
       json({
         data: [
-          { id: SOL_CLASS, name: 'SOL 1 A', day_of_week: 2, time_of_day: '19:00', status: status(phase) },
-          { id: id(9302), name: 'SOL 1 B', day_of_week: 4, time_of_day: '19:00', status: status('WAITING_COORDINATOR') },
+          { id: SOL_CLASS, name: `${solName} A`, day_of_week: 2, time_of_day: '19:00', status: status(phase) },
+          { id: id(9302), name: `${solName} B`, day_of_week: 4, time_of_day: '19:00', status: status('WAITING_COORDINATOR') },
         ],
       }),
     );
@@ -1191,7 +1200,7 @@ export async function mockCandidate(page: Page, tries: boolean, joins = false): 
  */
 export async function mockSolAttendance(
   page: Page,
-  options: { notCounted?: boolean } = {},
+  options: { notCounted?: boolean; level?: 'SOL_1' | 'SOL_2' } = {},
 ): Promise<{ sent: { url: string; body: unknown }[] }> {
   const sent: { url: string; body: unknown }[] = [];
   const lesson = (n: number, expected: string, extra: object) => ({
@@ -1221,8 +1230,8 @@ export async function mockSolAttendance(
   const body = {
     class: {
       id: CLASS_ID,
-      name: 'SOL 1 A',
-      level: 'SOL_1',
+      name: options.level === 'SOL_2' ? 'SOL 2 A' : 'SOL 1 A',
+      level: options.level ?? 'SOL_1',
       day_of_week: 2,
       time_of_day: '19:00',
       place: 'Room 2',

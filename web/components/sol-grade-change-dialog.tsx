@@ -71,12 +71,15 @@ export function SolGradeChangeDialog({
   onClose,
   student,
   className,
+  levelName,
   postedAt,
 }: {
   open: boolean;
   onClose: () => void;
   student: Student;
   className: string;
+  /** The class's level in words, which Training files or withdraws: SOL 1 or SOL 2 (decision 0516). */
+  levelName: string;
   postedAt: string | null;
 }) {
   const queryClient = useQueryClient();
@@ -188,9 +191,9 @@ export function SolGradeChangeDialog({
 
   const trainingWords = (training: 'FILES' | 'WITHDRAWS' | null | undefined) =>
     training === 'FILES'
-      ? ' SOL 1 goes into their Training from the school, unless they already have it.'
+      ? ` ${levelName} goes into their Training from the school, unless they already have it.`
       : training === 'WITHDRAWS'
-        ? ' The SOL 1 the school filed for them is withdrawn from their Training.'
+        ? ` The ${levelName} the school filed for them is withdrawn from their Training.`
         : '';
 
   if (reviewing && preview.data) {

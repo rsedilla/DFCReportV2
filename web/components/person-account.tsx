@@ -390,7 +390,7 @@ export function PersonAccount({
                     save={(next) => setCoordinatesSol2(current.id, next, crypto.randomUUID())}
                     describe={(shown) =>
                       shown
-                        ? `${firstName} coordinates SOL 2. Its classes open under Classes once DREAMS has SOL 2’s register and final grades.`
+                        ? `${firstName} opens the church's SOL 2 classes and names their Teachers, under Classes.`
                         : `${firstName} does not coordinate SOL 2.`
                     }
                   />

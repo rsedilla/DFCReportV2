@@ -618,13 +618,14 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     ],
   };
 
-  async function openAs(page: Page, schoolMayTick: boolean, sol1FromSchool = false) {
+  async function openAs(page: Page, schoolMayTick: boolean, sol1FromSchool = false, sol2FromSchool = false) {
     await mockSignedIn(page);
     await mockWholeChurchReader(page);
     await mockTraining(page, 'accepted', {
       rows: [TRAINING_TWO, FROM_SCHOOL],
       schoolMayTick,
       sol1FromSchool,
+      sol2FromSchool,
     });
     await page.goto('/growth/training?all=1');
     await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
@@ -657,6 +658,30 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     const ernani = page.getByRole('row', { name: /Ernani Pascual/ });
     await expect(ernani.getByRole('checkbox', { name: /^SOL 1,/ })).toHaveCount(0);
     await expect(ernani.getByRole('checkbox', { name: 'SOL 2, Ernani Pascual' })).toBeVisible();
+  });
+
+  test('once a SOL 2 class opens too, a leader ticks SOL 3 alone (decision 0516)', async ({ page }) => {
+    await openAs(page, false, true, true);
+    await expect(
+      page.getByText('You tick SOL 3. The Encounter, Life Class, SOL 1 and SOL 2 now come from the school.'),
+    ).toBeVisible();
+    const ernani = page.getByRole('row', { name: /Ernani Pascual/ });
+    await expect(ernani.getByRole('checkbox', { name: /^SOL 2,/ })).toHaveCount(0);
+    await expect(ernani.getByRole('checkbox', { name: 'SOL 3, Ernani Pascual' })).toBeVisible();
+  });
+
+  test('once a SOL 2 class opens too, the Admin ticks SOL 2 for one who finished before the school', async ({
+    page,
+  }) => {
+    await openAs(page, true, true, true);
+    await expect(
+      page.getByText(
+        'You can tick the Encounter, Life Class, SOL 1 and SOL 2 only for someone who finished before the school.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('row', { name: /Ernani Pascual/ }).getByRole('checkbox', { name: 'SOL 2, Ernani Pascual' }),
+    ).toBeVisible();
   });
 
   test('once a SOL 1 class opens, the Admin ticks SOL 1 for one who finished before the school', async ({

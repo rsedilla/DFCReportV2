@@ -18,25 +18,32 @@ export type SchoolEvidence =
   /** A posted *Passed*: dated the day it was posted. */
   | { kind: 'POSTED'; postedAt: Date };
 
+/** The SOL levels the school runs (decisions 0514 and 0516); SOL 3 is not one yet. */
+export type SolLevel = 'SOL_1' | 'SOL_2';
+
+/** The programs the school files from: the Encounter, Life Class and each SOL level it runs. */
+export type SchoolProgram = 'ENCOUNTER' | 'LIFE_CLASS' | SolLevel;
+
 export interface SchoolEvidencePort {
   /** Every current piece of evidence the school holds for these records, for one program. */
   evidenceWithin(
     trx: Transaction<Database>,
     personIds: readonly string[],
-    program: 'ENCOUNTER' | 'LIFE_CLASS' | 'SOL_1',
+    program: SchoolProgram,
   ): Promise<SchoolEvidence[]>;
   /**
-   * Whether the school runs SOL 1: a Coordinator has opened a SOL 1 class that was not cancelled
-   * (owner, 2026-11-26, "When a class opens"; decision 0514, point 13). From then only the Admin
-   * ticks SOL 1, for somebody who finished before the school.
+   * The SOL levels the school runs: each one a Coordinator has opened a class of that was not
+   * cancelled (owner, 2026-11-26, "When a class opens"; decision 0514, point 13; decision 0516,
+   * point 1). From then only the Admin ticks that level, for somebody who finished before the
+   * school.
    */
-  runsSol1(executor: Kysely<Database> | Transaction<Database>): Promise<boolean>;
+  solLevelsRun(executor: Kysely<Database> | Transaction<Database>): Promise<ReadonlySet<SolLevel>>;
   /**
-   * Holds off a SOL 1 class being opened until this transaction ends, taken by a Training save
-   * that names SOL 1 before it asks `runsSol1`, so a leader's tick never lands after a class
-   * opened (`equipping/sol-1-opening.ts`).
+   * Holds off a SOL class being opened until this transaction ends, taken by a Training save that
+   * names a SOL level before it asks `solLevelsRun`, so a leader's tick never lands after a class
+   * opened (`equipping/sol-opening.ts`).
    */
-  shareSol1OpeningWithin(trx: Transaction<Database>): Promise<void>;
+  shareSolOpeningWithin(trx: Transaction<Database>): Promise<void>;
 }
 
 export const SCHOOL_EVIDENCE_PORT = Symbol('SCHOOL_EVIDENCE_PORT');

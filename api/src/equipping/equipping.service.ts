@@ -35,7 +35,7 @@ import { EncounterSeasonsService } from '../training/encounter-seasons.service';
 import { TrainingService } from '../training/training.service';
 import { EQUIPPING_LEVELS } from './dto/equipping.dto';
 import { expectedOn } from './equipping-attendance.service';
-import { lockSol1OpeningWithin } from './sol-1-opening';
+import { lockSolOpeningWithin } from './sol-opening';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel, EquippingRequirement } from '../database/schema';
@@ -124,12 +124,6 @@ function decodeCursor(cursor: string | undefined): RegistrationCursor | null {
     field: 'cursor',
   });
 }
-
-/**
- * The levels whose classes may be opened (decision 0516, point 4): SOL 2 signs people up before
- * its register and final grades exist, and its classes wait for them.
- */
-const LEVELS_THAT_OPEN: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
 
 /** Each level's name in words, for a refusal or a line on a screen. */
 export const LEVEL_NAMES: Record<EquippingLevel, string> = {
@@ -1325,16 +1319,6 @@ export class EquippingService {
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     await this.assertCoordinatesLevel(actor, body.level);
-    // **No SOL 2 class opens before its register and final grades exist** (owner, 2026-11-27,
-    // decision 0516 point 4), for the Admin too: signing up for SOL 2 is open, its classes wait
-    // for the second step, which removes this refusal. Migration 0064 refuses one too.
-    if (!LEVELS_THAT_OPEN.includes(body.level)) {
-      throw new InvariantViolationError(
-        `A ${LEVEL_NAMES[body.level]} class can be opened once DREAMS has ` +
-          `${LEVEL_NAMES[body.level]}’s register and final grades.`,
-        { field: 'level' },
-      );
-    }
     const teacher =
       body.teacher_person_id === undefined ? null : await this.teacherOf(body.teacher_person_id);
     // Life Class names its Encounter weekend; SOL has no Encounter (decision 0514).
@@ -1350,10 +1334,10 @@ export class EquippingService {
     }
 
     return this.write(async (trx) => {
-      // Opening a SOL 1 class makes SOL 1 the school's in Training (decision 0514, point 13),
-      // after any leader's SOL 1 save already under way.
-      if (body.level === 'SOL_1') {
-        await lockSol1OpeningWithin(trx);
+      // Opening a SOL class makes its level the school's in Training (decision 0514, point 13;
+      // decision 0516, point 1), after any leader's save of a SOL level already under way.
+      if (body.level !== 'LIFE_CLASS') {
+        await lockSolOpeningWithin(trx);
       }
       if (teacher !== null) {
         await this.assertMayTeachWithin(trx, teacher.id);
