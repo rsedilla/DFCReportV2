@@ -33,8 +33,8 @@ const COLUMNS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 export default function TeachPage() {
   const { classes: unsorted, people, loading } = useMyClasses();
   const [level, setLevel] = useState<Level>('LIFE_CLASS');
-  // Every class the school runs is Life Class today (decision 0499).
-  const classes = level === 'LIFE_CLASS' ? [...unsorted].sort((a, b) => a.name.localeCompare(b.name)) : [];
+  // Each level's own classes: Life Class, and SOL 1 since its register is built (decision 0514).
+  const classes = unsorted.filter((each) => each.level === level).sort((a, b) => a.name.localeCompare(b.name));
   const teaching = classes.filter((each) => each.role === 'TEACHER');
   const guiding = classes.filter((each) => each.role === 'GUIDE');
   const atLevel = people.filter((each) => each.level === level);

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { sql, type Transaction } from 'kysely';
 
 import { AuditService } from '../audit/audit.service';
+import { AccountsRepository } from '../auth/accounts.repository';
 import { Capability } from '../auth/authorization/capabilities';
 import {
   AuthorizationService,
@@ -29,7 +30,15 @@ import { resolverOf } from '../common/merged-identity';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel } from '../database/schema';
-import type { RecordMakeUpDto, SaveLessonDto } from './dto/equipping.dto';
+import type {
+  RecordBookDto,
+  RecordItemsBroughtDto,
+  UntickItemBroughtDto,
+  RecordMakeUpDto,
+  RecordQuizTryDto,
+  SaveLessonDto,
+  SetQuizDto,
+} from './dto/equipping.dto';
 import { bySchoolName, schoolPerson } from './school-order';
 
 /**
@@ -37,6 +46,51 @@ import { bySchoolName, schoolPerson } from './school-order';
  * and attendance are the Registrar's (decision 0501, points 13 and 14).
  */
 export const CLASS_LESSONS = [1, 2, 3, 4, 6, 7, 8, 9] as const;
+
+/** A SOL quiz is taken at most three times: the first try and two retakes (decision 0501). */
+export const QUIZ_TRIES = 3;
+
+/** A SOL quiz passes at 70% of its items (decision 0501, point 18). */
+export function passesQuiz(score: number, items: number): boolean {
+  return score * 10 >= items * 7;
+}
+
+/** An account's Person by name, or null where the account names nobody. */
+function nameOf(
+  names: Map<string, string>,
+  accountId: string | null | undefined,
+): { account_id: string; full_name: string | null } | null {
+  return accountId ? { account_id: accountId, full_name: names.get(accountId) ?? null } : null;
+}
+
+/** One lesson of a SOL student's register, as the register read returns it. */
+interface SolMark {
+  lesson: number;
+  came: boolean;
+  made_up_on: string | null;
+  held_on: string;
+  verse?: boolean | null;
+  devotional?: boolean | null;
+  verse_brought_on?: string | null;
+  devotional_brought_on?: string | null;
+  verse_brought_by?: string | null;
+  devotional_brought_by?: string | null;
+}
+
+interface SolStudent {
+  enrollment_id: string;
+  person: unknown;
+  cell_leader: unknown;
+  marks: SolMark[];
+}
+
+/** SOL's ten weekly lessons, with no Encounter among them (decision 0501, point 17). */
+export const SOL_LESSONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
+
+/** A class's weekly lessons, by its level. */
+export function lessonsOf(level: EquippingLevel): readonly number[] {
+  return level === 'LIFE_CLASS' ? CLASS_LESSONS : SOL_LESSONS;
+}
 
 /** Where a lesson stands, said on the Teacher's lesson row and the Coordinator's Classes. */
 export type LessonState = 'SAVED' | 'NOT_YET' | 'TODAY' | 'TO_RECORD' | 'LATE' | 'NOT_RECORDED';
@@ -76,15 +130,15 @@ export function unrecordedState(expected: string, now: Date): LessonState {
 }
 
 /**
- * **SOL 1's register, final grades and posting are not built yet** (decision 0514): they come
- * with steps 2 and 3 of SOL 1. Until then a SOL 1 class reaches none of Life Class's, whose nine
- * lessons, Encounter and posting would grade it and file a Life Class graduation. Removed by the
- * step that builds each.
+ * **SOL 1's final grades and posting are not built yet** (decision 0514): they come with step 3 of
+ * SOL 1, its register having come with step 2. Until then a SOL 1 class reaches none of Life
+ * Class's grading, whose nine lessons, Encounter and posting would grade it and file a Life Class
+ * graduation. Removed by the step that builds it.
  */
 export function refuseSolNotBuilt(cls: { name: string; level: string }): void {
   if (cls.level !== 'LIFE_CLASS') {
     throw new InvariantViolationError(
-      `${cls.name} is a SOL 1 class, and SOL 1's register and grades are not built yet.`,
+      `${cls.name} is a SOL 1 class, and SOL 1's grades are not built yet.`,
       { field: 'class_id' },
     );
   }
@@ -117,6 +171,19 @@ export interface RegisterEntry {
    * same class for one who left it and came back; null for the enrollment they are in now.
    */
   fromClass: { id: string; name: string } | null;
+  /**
+   * SOL's memory verse and devotional for this lesson (decision 0514, points 8 and 9): ticked with
+   * the lesson for a student who came, at the make-up for one who did not; null while neither has
+   * been recorded, and always on Life Class.
+   */
+  verse: boolean | null;
+  devotional: boolean | null;
+  /** The day a verse or devotional not ticked at the time was brought (decision 0514, point 10). */
+  verseBroughtOn: string | null;
+  devotionalBroughtOn: string | null;
+  /** The account that ticked each late, for *Brought late* (owner, 2026-11-26). */
+  verseBroughtBy: string | null;
+  devotionalBroughtBy: string | null;
 }
 
 interface Standing {
@@ -150,7 +217,23 @@ export class EquippingAttendanceService {
     private readonly hierarchy: HierarchyService,
     private readonly audit: AuditService,
     private readonly idempotency: IdempotencyService,
+    private readonly accounts: AccountsRepository,
   ) {}
+
+  /** Each account's Person's full name, keyed by account, through the modules that own them. */
+  private async namesOfAccounts(
+    accountIds: readonly (string | null)[],
+  ): Promise<Map<string, string>> {
+    const wanted = [...new Set(accountIds.filter((id): id is string => id !== null))];
+    const personOf = await this.accounts.personsOfAccounts(wanted);
+    const names = await this.people.namesOf([...new Set(personOf.values())]);
+    return new Map(
+      [...personOf].flatMap(([account, person]) => {
+        const name = names.get(person);
+        return name ? [[account, name.fullName] as const] : [];
+      }),
+    );
+  }
 
   // ---------------------------------------------------------------------------
   // Reads
@@ -169,6 +252,7 @@ export class EquippingAttendanceService {
       .select([
         'c.id',
         'c.name',
+        'c.level',
         'c.day_of_week',
         'c.time_of_day',
         'c.first_lesson_on',
@@ -180,8 +264,6 @@ export class EquippingAttendanceService {
       )
       // A cancelled class is listed only on the Coordinator's *Cancelled* (decision 0510).
       .where('c.cancelled_at', 'is', null)
-      // SOL 1's register is not built yet (decision 0514).
-      .where('c.level', '=', 'LIFE_CLASS')
       .orderBy('c.first_lesson_on', 'desc')
       .orderBy('c.name')
       .execute();
@@ -189,6 +271,7 @@ export class EquippingAttendanceService {
       data: rows.map((row) => ({
         id: row.id,
         name: row.name,
+        level: row.level,
         day_of_week: row.day_of_week,
         time_of_day: String(row.time_of_day).slice(0, 5),
         first_lesson_on: String(row.first_lesson_on),
@@ -366,7 +449,7 @@ export class EquippingAttendanceService {
     if (cls.cancelled_at !== null) {
       throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
     }
-    refuseSolNotBuilt(cls);
+    // SOL 1's register is built (decision 0514, points 8 to 10); its grades come in step 3.
 
     let enrolled = await this.db
       .selectFrom('equipping_enrollments as e')
@@ -415,7 +498,8 @@ export class EquippingAttendanceService {
     const now = await databaseNow(this.db);
     const encounters = await this.encounterOf(this.db, personIds);
     const byNumber = new Map(lessons.map((row) => [row.lesson, row]));
-    const lessonRow = CLASS_LESSONS.map((n) => {
+    const levelLessons = lessonsOf(cls.level);
+    const lessonRow = levelLessons.map((n) => {
       const saved = byNumber.get(n);
       const expected = expectedOn(cls.first_lesson_on, n);
       return {
@@ -445,7 +529,7 @@ export class EquippingAttendanceService {
           // Joined at Lesson 6, keeping lessons 1 to 4 and the Encounter (decision 0512).
           carried: carries.get(row.enrollment_id) ?? null,
           encounter: encounters.get(canonicalId(row.person_id)) ?? null,
-          marks: CLASS_LESSONS.flatMap((n) => {
+          marks: levelLessons.flatMap((n) => {
             const entry = register.get(n);
             return entry
               ? [
@@ -456,6 +540,17 @@ export class EquippingAttendanceService {
                     held_on: entry.heldOn,
                     before_joining: entry.beforeJoining,
                     from_class: entry.fromClass,
+                    // SOL's two ticks, and the day each was brought late (decision 0514).
+                    ...(cls.level === 'LIFE_CLASS'
+                      ? {}
+                      : {
+                          verse: entry.verse,
+                          devotional: entry.devotional,
+                          verse_brought_on: entry.verseBroughtOn,
+                          devotional_brought_on: entry.devotionalBroughtOn,
+                          verse_brought_by: entry.verseBroughtBy,
+                          devotional_brought_by: entry.devotionalBroughtBy,
+                        }),
                   },
                 ]
               : [];
@@ -464,6 +559,7 @@ export class EquippingAttendanceService {
       })
       // Last-name order, as every school list (decision 0515).
       .sort(bySchoolName(names));
+    const sol = cls.level === 'LIFE_CLASS' ? null : await this.solRecordOf(cls.id, students);
 
     const owed = students.flatMap((student) =>
       student.marks
@@ -482,6 +578,7 @@ export class EquippingAttendanceService {
       class: {
         id: cls.id,
         name: cls.name,
+        level: cls.level,
         day_of_week: cls.day_of_week,
         time_of_day: String(cls.time_of_day).slice(0, 5),
         place: cls.place,
@@ -497,9 +594,192 @@ export class EquippingAttendanceService {
       may_record: standing.teaches || standing.wide,
       may_correct_closed: standing.wide,
       lessons: lessonRow,
-      students,
+      students: sol === null ? students : sol.students,
       owed,
+      ...(sol === null ? {} : { quiz: sol.quiz, owed_items: sol.owedItems }),
     };
+  }
+
+  /**
+   * **What SOL's register adds** (decision 0514, points 8 to 10; owner rulings of 2026-11-26):
+   * each student's quiz tries and result, whether they read the book, the verses and devotionals
+   * counted out of ten, what they still owe, and the class's *Verses and devotionals still owed*,
+   * one row a student, listing an absent student only once their make-up is recorded.
+   */
+  private async solRecordOf<T extends SolStudent>(
+    classId: string,
+    students: readonly T[],
+  ): Promise<{
+    quiz: { items: number | null };
+    students: unknown[];
+    owedItems: Record<string, unknown>[];
+  }> {
+    const ids = students.map((s) => s.enrollment_id);
+    const [quiz, tries, books] = await Promise.all([
+      this.db
+        .selectFrom('equipping_quizzes')
+        .select('items')
+        .where('class_id', '=', classId)
+        .executeTakeFirst(),
+      ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .selectFrom('equipping_quiz_tries')
+            .select([
+              'enrollment_id',
+              'try',
+              'score',
+              'recorded_by',
+              'recorded_at',
+              'superseded_at',
+            ])
+            .where('enrollment_id', 'in', ids)
+            .orderBy('try')
+            .orderBy('recorded_at')
+            .execute(),
+      ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .selectFrom('equipping_books')
+            .select(['enrollment_id', 'read'])
+            .where('enrollment_id', 'in', ids)
+            .where('superseded_at', 'is', null)
+            .execute(),
+    ]);
+    const items = quiz?.items ?? null;
+    const readOf = new Map(books.map((b) => [canonicalId(b.enrollment_id), b.read]));
+    // Who corrected a try and who ticked an item late, named on the register (owner, 2026-11-26).
+    const byAccount = await this.namesOfAccounts([
+      ...tries.filter((t) => t.superseded_at === null).map((t) => t.recorded_by),
+      ...students.flatMap((st) =>
+        st.marks.flatMap((m) => [m.verse_brought_by ?? null, m.devotional_brought_by ?? null]),
+      ),
+    ]);
+    const now = await databaseNow(this.db);
+    const owedItems: Record<string, unknown>[] = [];
+    const withRecord = students.map((student) => {
+      const key = canonicalId(student.enrollment_id);
+      const everyTry = tries.filter((t) => canonicalId(t.enrollment_id) === key);
+      const own = everyTry.filter((t) => t.superseded_at === null);
+      const passed = items !== null && own.some((t) => passesQuiz(t.score, items));
+      const bookRead = readOf.get(key) ?? false;
+      const done = (m: SolMark) => m.came || m.made_up_on !== null;
+      const hasVerse = (m: SolMark) => m.verse === true || (m.verse_brought_on ?? null) !== null;
+      const hasDevotional = (m: SolMark) =>
+        m.devotional === true || (m.devotional_brought_on ?? null) !== null;
+      // Owed only for a lesson the student came to or made up: an absent student's two are ticked
+      // at the make-up (decision 0514, points 9 and 10).
+      const owing = student.marks.flatMap((m) => {
+        if (!done(m)) {
+          return [];
+        }
+        const what = [
+          ...(hasVerse(m) ? [] : ['VERSE' as const]),
+          ...(hasDevotional(m) ? [] : ['DEVOTIONAL' as const]),
+        ];
+        return what.length === 0
+          ? []
+          : [
+              {
+                lesson: m.lesson,
+                items: what,
+                owed_since: m.came ? m.held_on : m.made_up_on,
+                made_up: !m.came,
+                held_on: m.held_on,
+              },
+            ];
+      });
+      // The card lists what is owed from a lesson whose week has closed, or from a make-up
+      // recorded without it; while a lesson's week is open its own tab is where it is ticked
+      // (decision 0514, point 10, as approved).
+      const onCard = owing.filter(
+        (o) => o.made_up || now.getTime() >= recordClosesAt(o.held_on).getTime(),
+      );
+      if (onCard.length > 0) {
+        owedItems.push({
+          enrollment_id: student.enrollment_id,
+          person: student.person,
+          cell_leader: student.cell_leader,
+          lessons: onCard.map((o) => ({
+            lesson: o.lesson,
+            items: o.items,
+            owed_since: o.owed_since,
+            made_up: o.made_up,
+          })),
+        });
+      }
+      return {
+        ...student,
+        // Who ticked late is named under *Brought late*, not on each mark.
+        marks: student.marks.map((m) => {
+          const mark = { ...m };
+          delete mark.verse_brought_by;
+          delete mark.devotional_brought_by;
+          return mark;
+        }),
+        // Each lesson's verse or devotional ticked late, which the Teacher may untick (owner,
+        // 2026-11-26).
+        brought_late: student.marks.flatMap((m) =>
+          (
+            [
+              ['VERSE', m.verse_brought_on, m.verse_brought_by],
+              ['DEVOTIONAL', m.devotional_brought_on, m.devotional_brought_by],
+            ] as const
+          ).flatMap(([item, on, by]) =>
+            on
+              ? [{ lesson: m.lesson, item, brought_on: on, ticked_by: nameOf(byAccount, by) }]
+              : [],
+          ),
+        ),
+        quiz: {
+          tries: own.map((t) => {
+            // A corrected try names the score it replaced (owner, 2026-11-26): the row its
+            // correction closed, in the same transaction, so both carry one instant. A row closed
+            // because an earlier try was corrected to a pass is not one it replaced.
+            const before = everyTry.find(
+              (e) =>
+                e.try === t.try &&
+                e.superseded_at !== null &&
+                e.superseded_at.getTime() === t.recorded_at.getTime(),
+            );
+            return {
+              try: t.try,
+              score: t.score,
+              ...(before
+                ? {
+                    corrected_from: before.score,
+                    corrected_by: nameOf(byAccount, t.recorded_by),
+                    corrected_on: manilaDayOf(t.recorded_at),
+                  }
+                : {}),
+            };
+          }),
+          // A later try left behind by an earlier one corrected to a pass: kept, not counted.
+          not_counted: [...new Set(everyTry.map((t) => t.try))]
+            .filter((n) => !own.some((t) => t.try === n))
+            .map((n) => {
+              const last = everyTry.filter((t) => t.try === n).at(-1)!;
+              return { try: n, score: last.score };
+            }),
+          passed,
+          // Two retakes after the first try; none once passed (decision 0501, point 18).
+          retakes_left: passed ? 0 : Math.min(QUIZ_TRIES - 1, QUIZ_TRIES - own.length),
+          // A first try, or a retake after a failed one, never past the third (owner, 2026-11-26).
+          may_add_try: items !== null && !passed && own.length < QUIZ_TRIES,
+        },
+        book_read: bookRead,
+        verses: student.marks.filter((m) => done(m) && hasVerse(m)).length,
+        devotionals: student.marks.filter((m) => done(m) && hasDevotional(m)).length,
+        still_missing: {
+          make_ups: student.marks.filter((m) => !done(m)).map((m) => m.lesson),
+          verses: owing.filter((o) => o.items.includes('VERSE')).map((o) => o.lesson),
+          devotionals: owing.filter((o) => o.items.includes('DEVOTIONAL')).map((o) => o.lesson),
+          quiz: !passed,
+          book: !bookRead,
+        },
+      };
+    });
+    return { quiz: { items }, students: withRecord, owedItems };
   }
 
   /**
@@ -507,7 +787,7 @@ export class EquippingAttendanceService {
    * the Coordinator's *Attendance* column (decision 0501, point 22): *L1 not recorded · L3 late*.
    */
   async lessonProblemsOf(
-    classes: readonly { id: string; first_lesson_on: string }[],
+    classes: readonly { id: string; level: EquippingLevel; first_lesson_on: string }[],
   ): Promise<Map<string, { late: number[]; not_recorded: number[] }>> {
     const result = new Map<string, { late: number[]; not_recorded: number[] }>();
     if (classes.length === 0) {
@@ -525,10 +805,12 @@ export class EquippingAttendanceService {
     const done = new Set(saved.map((row) => `${row.class_id}:${row.lesson}`));
     const now = await databaseNow(this.db);
     for (const cls of classes) {
-      const states = CLASS_LESSONS.filter((n) => !done.has(`${cls.id}:${n}`)).map((n) => ({
-        n,
-        state: unrecordedState(expectedOn(cls.first_lesson_on, n), now),
-      }));
+      const states = lessonsOf(cls.level)
+        .filter((n) => !done.has(`${cls.id}:${n}`))
+        .map((n) => ({
+          n,
+          state: unrecordedState(expectedOn(cls.first_lesson_on, n), now),
+        }));
       result.set(cls.id, {
         late: states.filter((s) => s.state === 'LATE').map((s) => s.n),
         not_recorded: states.filter((s) => s.state === 'NOT_RECORDED').map((s) => s.n),
@@ -554,11 +836,8 @@ export class EquippingAttendanceService {
     body: SaveLessonDto,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
-    if (!(CLASS_LESSONS as readonly number[]).includes(lesson)) {
-      throw new ValidationFailedError(
-        'A class records lessons 1 to 4 and 6 to 9; lesson 5 is the Encounter, the Registrar’s.',
-        { field: 'lesson' },
-      );
+    if (!(SOL_LESSONS as readonly number[]).includes(lesson)) {
+      throw new ValidationFailedError('A class records lessons 1 to 10.', { field: 'lesson' });
     }
     return this.db.transaction().execute(async (trx) => {
       const cls = await this.lockClassWithin(trx, classId);
@@ -570,8 +849,30 @@ export class EquippingAttendanceService {
       }
       // What the class's state refuses is told only to somebody the check above admits.
       this.refuseCancelled(cls);
-      refuseSolNotBuilt(cls);
       await this.refusePostedWithin(trx, cls);
+      const sol = cls.level !== 'LIFE_CLASS';
+      if (!lessonsOf(cls.level).includes(lesson)) {
+        throw new ValidationFailedError(
+          'A Life Class records lessons 1 to 4 and 6 to 9; lesson 5 is the Encounter, the Registrar’s.',
+          { field: 'lesson' },
+        );
+      }
+      // SOL ticks the memory verse and the devotional with the lesson, and Life Class neither
+      // (decision 0514, point 8).
+      if (!sol && ((body.verse?.length ?? 0) > 0 || (body.devotional?.length ?? 0) > 0)) {
+        throw new InvariantViolationError(
+          'A Life Class lesson ticks who came; the memory verse and devotional are SOL’s.',
+          { field: (body.verse?.length ?? 0) > 0 ? 'verse' : 'devotional' },
+        );
+      }
+      // A SOL lesson save says both, even when nobody recited or handed in: an absent list would
+      // otherwise read as "nobody", and quietly untick everyone already ticked.
+      if (sol && (body.verse === undefined || body.devotional === undefined)) {
+        throw new ValidationFailedError(
+          'A SOL lesson says who recited the memory verse and who handed in the devotional.',
+          { field: body.verse === undefined ? 'verse' : 'devotional' },
+        );
+      }
       const now = await databaseNow(trx);
       const today = manilaDayOf(now);
       if (body.held_on > today) {
@@ -652,6 +953,25 @@ export class EquippingAttendanceService {
           });
         }
       }
+      // A memory verse or devotional is ticked only for somebody ticked as came; an absent
+      // student's two are ticked at the make-up (decision 0514, point 9).
+      const verses = new Set((body.verse ?? []).map((id) => canonicalId(id)));
+      const devotionals = new Set((body.devotional ?? []).map((id) => canonicalId(id)));
+      for (const [field, ticked] of [
+        ['verse', verses],
+        ['devotional', devotionals],
+      ] as const) {
+        for (const id of ticked) {
+          if (!came.has(id)) {
+            throw new ValidationFailedError(
+              field === 'verse'
+                ? 'A memory verse is ticked only for somebody ticked as came.'
+                : 'A devotional is ticked only for somebody ticked as came.',
+              { field },
+            );
+          }
+        }
+      }
 
       // A make-up falls after the lesson it makes up (decision 0503, point 2), so a date may not
       // move past one already recorded.
@@ -694,7 +1014,7 @@ export class EquippingAttendanceService {
 
       const current = await trx
         .selectFrom('equipping_marks')
-        .select(['id', 'enrollment_id', 'came'])
+        .select(['id', 'enrollment_id', 'came', 'verse', 'devotional'])
         .where('lesson_id', '=', lessonId)
         .where('superseded_at', 'is', null)
         .execute();
@@ -725,7 +1045,15 @@ export class EquippingAttendanceService {
             : [];
         }),
       );
-      const changed: { person_id: string; came: boolean; before: boolean | null }[] = [];
+      const changed: {
+        person_id: string;
+        came: boolean;
+        before: boolean | null;
+        verse: boolean | null;
+        devotional: boolean | null;
+        verseBefore: boolean | null;
+        devotionalBefore: boolean | null;
+      }[] = [];
       // Marks a date corrected to before the student joined removed (owner, 2026-11-21).
       const unmarked: { person_id: string; came: boolean }[] = [];
       // Make-ups closed because the student is now marked as having come, kept for the audit entry.
@@ -766,7 +1094,15 @@ export class EquippingAttendanceService {
           continue;
         }
         marked.push(row);
-        if (was && was.came === want) {
+        // SOL's two ticks for whoever came, none for somebody absent or in Life Class.
+        const wantVerse = sol && want ? verses.has(canonicalId(row.id)) : null;
+        const wantDevotional = sol && want ? devotionals.has(canonicalId(row.id)) : null;
+        if (
+          was &&
+          was.came === want &&
+          was.verse === wantVerse &&
+          was.devotional === wantDevotional
+        ) {
           continue;
         }
         if (was) {
@@ -777,8 +1113,9 @@ export class EquippingAttendanceService {
             .execute();
         }
         // Marked as having come: a make-up of this lesson here no longer stands, whether it made
-        // up an absence or a lesson the date had placed before they joined.
-        if (want) {
+        // up an absence or a lesson the date had placed before they joined. A tick that changes
+        // only the verse or devotional of somebody who came leaves no make-up to close.
+        if (want && !(was && was.came)) {
           const closedMakeUps = await trx
             .updateTable('equipping_make_ups')
             .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
@@ -800,13 +1137,23 @@ export class EquippingAttendanceService {
             lesson_id: lessonId,
             enrollment_id: row.id,
             came: want,
+            verse: wantVerse,
+            devotional: wantDevotional,
             recorded_by: actor.accountId,
             // The Admin's reason for a closed week, kept on every mark it writes, a first one
             // included (principle 12).
             correction_reason: body.correction_reason ?? null,
           })
           .execute();
-        changed.push({ person_id: row.person_id, came: want, before: was ? was.came : null });
+        changed.push({
+          person_id: row.person_id,
+          came: want,
+          before: was ? was.came : null,
+          verse: wantVerse,
+          devotional: wantDevotional,
+          verseBefore: was ? was.verse : null,
+          devotionalBefore: was ? was.devotional : null,
+        });
       }
 
       // A date changed keeps the date it changed, as a mark keeps the mark (principle 12).
@@ -850,6 +1197,12 @@ export class EquippingAttendanceService {
             held_on: body.held_on,
             came: changed.filter((c) => c.came).map((c) => c.person_id),
             absent: changed.filter((c) => !c.came).map((c) => c.person_id),
+            ...(sol
+              ? {
+                  verse: changed.filter((c) => c.verse === true).map((c) => c.person_id),
+                  devotional: changed.filter((c) => c.devotional === true).map((c) => c.person_id),
+                }
+              : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
           },
@@ -864,7 +1217,11 @@ export class EquippingAttendanceService {
             lesson,
             held_on: String(existing.held_on),
             marks: [
-              ...changed.map((c) => ({ person_id: c.person_id, came: c.before })),
+              ...changed.map((c) => ({
+                person_id: c.person_id,
+                came: c.before,
+                ...(sol ? { verse: c.verseBefore, devotional: c.devotionalBefore } : {}),
+              })),
               // Marks the corrected date removed, their values here and none after.
               ...unmarked,
             ],
@@ -872,7 +1229,11 @@ export class EquippingAttendanceService {
           after: {
             lesson,
             held_on: body.held_on,
-            marks: changed.map((c) => ({ person_id: c.person_id, came: c.came })),
+            marks: changed.map((c) => ({
+              person_id: c.person_id,
+              came: c.came,
+              ...(sol ? { verse: c.verse, devotional: c.devotional } : {}),
+            })),
             ...(unmarked.length > 0 ? { marks_removed: unmarked.map((u) => u.person_id) } : {}),
             ...(makeUpsClosed.length > 0 ? { make_ups_closed: makeUpsClosed } : {}),
             ...(body.correction_reason !== undefined ? { reason: body.correction_reason } : {}),
@@ -913,8 +1274,24 @@ export class EquippingAttendanceService {
         );
       }
       this.refuseCancelled(cls);
-      refuseSolNotBuilt(cls);
       await this.refusePostedWithin(trx, cls);
+      // SOL's make-up says whether the memory verse was recited and the devotional handed in,
+      // and Life Class's says neither (decision 0514, point 9).
+      const sol = cls.level !== 'LIFE_CLASS';
+      if (sol && (body.verse === undefined || body.devotional === undefined)) {
+        throw new ValidationFailedError(
+          'A SOL make-up says whether the memory verse was recited and the devotional handed in.',
+          { field: body.verse === undefined ? 'verse' : 'devotional' },
+        );
+      }
+      if (!sol && (body.verse !== undefined || body.devotional !== undefined)) {
+        throw new InvariantViolationError(
+          'A Life Class make-up records the day; the memory verse and devotional are SOL’s.',
+          { field: body.verse !== undefined ? 'verse' : 'devotional' },
+        );
+      }
+      const verse = sol ? (body.verse as boolean) : null;
+      const devotional = sol ? (body.devotional as boolean) : null;
       const student = await trx
         .selectFrom('equipping_enrollments as e')
         .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
@@ -978,13 +1355,18 @@ export class EquippingAttendanceService {
       const lesson = { id: target.lessonId };
       const was = await trx
         .selectFrom('equipping_make_ups')
-        .select(['id', 'made_up_on'])
+        .select(['id', 'made_up_on', 'verse', 'devotional'])
         .where('lesson_id', '=', target.lessonId)
         .where('enrollment_id', '=', target.enrollmentId)
         .where('superseded_at', 'is', null)
         .forUpdate()
         .executeTakeFirst();
-      if (!was || String(was.made_up_on) !== body.made_up_on) {
+      if (
+        !was ||
+        String(was.made_up_on) !== body.made_up_on ||
+        was.verse !== verse ||
+        was.devotional !== devotional
+      ) {
         // **A carried make-up stands as its class recorded it** (owner, 2026-11-21). One made in
         // an earlier class for a lesson held before the student joined it keeps reading as made up
         // even after that class moves the lesson to on or after the day they joined; it is then no
@@ -1015,6 +1397,8 @@ export class EquippingAttendanceService {
             lesson_id: lesson.id,
             enrollment_id: target.enrollmentId,
             made_up_on: body.made_up_on,
+            verse,
+            devotional,
             recorded_by: actor.accountId,
           })
           .execute();
@@ -1026,12 +1410,18 @@ export class EquippingAttendanceService {
           targetType: 'person',
           targetId: student.person_id,
           before: was
-            ? { class_id: missedIn, lesson: body.lesson, made_up_on: String(was.made_up_on) }
+            ? {
+                class_id: missedIn,
+                lesson: body.lesson,
+                made_up_on: String(was.made_up_on),
+                ...(sol ? { verse: was.verse, devotional: was.devotional } : {}),
+              }
             : null,
           after: {
             class_id: missedIn,
             lesson: body.lesson,
             made_up_on: body.made_up_on,
+            ...(sol ? { verse, devotional } : {}),
             ...(target.beforeJoining ? { before_joining: true } : {}),
           },
         });
@@ -1041,10 +1431,426 @@ export class EquippingAttendanceService {
         enrollment_id: student.id,
         lesson: body.lesson,
         made_up_on: body.made_up_on,
+        ...(sol ? { verse, devotional } : {}),
       };
       await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
       return response;
     });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/items-brought`: a SOL student's memory verse or devotional
+   * brought after its lesson, ticked from *Verses and devotionals still owed* (decision 0514,
+   * point 10). It counts as an on-time one and carries no late mark. Only for a lesson the
+   * student came to or made up, and only for one not already ticked; the Teacher ticks it until
+   * the class's final grades are posted.
+   */
+  async recordItemsBrought(
+    actor: Actor,
+    classId: string,
+    body: RecordItemsBroughtDto,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.db.transaction().execute(async (trx) => {
+      await this.solWriteWithin(trx, actor, classId, 'ticks what a student brings');
+      const student = await this.studentWithin(trx, classId, body.enrollment_id);
+      const registers = await this.registersOf(trx, classId, [
+        {
+          enrollment_id: student.id,
+          registration_id: student.registration_id,
+          started_at: student.started_at,
+        },
+      ]);
+      const target = registers.get(student.id)!.get(body.lesson);
+      if (!target || (!target.came && target.madeUpOn === null)) {
+        throw new InvariantViolationError(
+          'A verse or devotional is ticked here for a lesson the student came to or made up. An absent student’s are ticked with the make-up.',
+          { field: 'lesson' },
+        );
+      }
+      const owedSince = target.came ? target.heldOn : (target.madeUpOn as string);
+      const today = manilaDayOf(await databaseNow(trx));
+      if (body.brought_on > today || body.brought_on < owedSince) {
+        throw new ValidationFailedError(
+          'The day it was brought falls between the lesson, or its make-up, and today.',
+          { field: 'brought_on' },
+        );
+      }
+      for (const item of body.items) {
+        const counted =
+          item === 'VERSE'
+            ? target.verse === true || target.verseBroughtOn !== null
+            : target.devotional === true || target.devotionalBroughtOn !== null;
+        if (counted) {
+          throw new InvariantViolationError(
+            item === 'VERSE'
+              ? `The memory verse of L${body.lesson} is already ticked.`
+              : `The devotional of L${body.lesson} is already ticked.`,
+            { field: 'items' },
+          );
+        }
+      }
+      for (const item of body.items) {
+        await trx
+          .insertInto('equipping_items_brought')
+          .values({
+            lesson_id: target.lessonId,
+            enrollment_id: target.enrollmentId,
+            item,
+            brought_on: body.brought_on,
+            recorded_by: actor.accountId,
+          })
+          .execute();
+      }
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_items.brought',
+        targetType: 'person',
+        targetId: student.person_id,
+        before: null,
+        after: {
+          class_id: target.fromClass?.id ?? classId,
+          lesson: body.lesson,
+          items: body.items,
+          brought_on: body.brought_on,
+        },
+      });
+      const response = {
+        class_id: classId,
+        enrollment_id: student.id,
+        lesson: body.lesson,
+        items: body.items,
+        brought_on: body.brought_on,
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/items-brought/untick`: a late verse or devotional ticked by
+   * mistake, unticked by the Teacher until posting (owner, 2026-11-26, "Yes, all three"). The
+   * tick is closed and kept, and what it covered is owed again.
+   */
+  async untickItemBrought(
+    actor: Actor,
+    classId: string,
+    body: UntickItemBroughtDto,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.db.transaction().execute(async (trx) => {
+      await this.solWriteWithin(trx, actor, classId, 'unticks what a student brought');
+      const student = await this.studentWithin(trx, classId, body.enrollment_id);
+      const registers = await this.registersOf(trx, classId, [
+        {
+          enrollment_id: student.id,
+          registration_id: student.registration_id,
+          started_at: student.started_at,
+        },
+      ]);
+      const target = registers.get(student.id)!.get(body.lesson);
+      const tick = target
+        ? await trx
+            .selectFrom('equipping_items_brought')
+            .select(['id', 'brought_on'])
+            .where('lesson_id', '=', target.lessonId)
+            .where('enrollment_id', '=', target.enrollmentId)
+            .where('item', '=', body.item)
+            .where('superseded_at', 'is', null)
+            .forUpdate()
+            .executeTakeFirst()
+        : undefined;
+      if (!target || !tick) {
+        throw new InvariantViolationError(
+          body.item === 'VERSE'
+            ? `The memory verse of L${body.lesson} is not ticked as brought late.`
+            : `The devotional of L${body.lesson} is not ticked as brought late.`,
+          { field: 'item' },
+        );
+      }
+      await trx
+        .updateTable('equipping_items_brought')
+        .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+        .where('id', '=', tick.id)
+        .execute();
+      await this.audit.writeWithin(trx, {
+        actorId: actor.accountId,
+        action: 'equipping_items.unticked',
+        targetType: 'person',
+        targetId: student.person_id,
+        before: {
+          class_id: target.fromClass?.id ?? classId,
+          lesson: body.lesson,
+          item: body.item,
+          brought_on: String(tick.brought_on),
+        },
+        after: null,
+      });
+      const response = {
+        class_id: classId,
+        enrollment_id: student.id,
+        lesson: body.lesson,
+        item: body.item,
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/quiz`: a SOL class's quiz, its number of items entered once
+   * (decision 0501, point 18), and corrected only until the first score is recorded, after which
+   * every score is read against it.
+   */
+  async setQuiz(
+    actor: Actor,
+    classId: string,
+    body: SetQuizDto,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.db.transaction().execute(async (trx) => {
+      await this.solWriteWithin(trx, actor, classId, 'sets the quiz');
+      const was = await trx
+        .selectFrom('equipping_quizzes')
+        .select('items')
+        .where('class_id', '=', classId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!was || was.items !== body.items) {
+        if (was) {
+          const scored = await trx
+            .selectFrom('equipping_quiz_tries as t')
+            .innerJoin('equipping_enrollments as e', 'e.id', 't.enrollment_id')
+            .select('t.id')
+            .where('e.class_id', '=', classId)
+            .executeTakeFirst();
+          if (scored) {
+            throw new InvariantViolationError(
+              'A score is recorded against this quiz, so its number of items stays as it is.',
+              { field: 'items' },
+            );
+          }
+          await trx
+            .updateTable('equipping_quizzes')
+            .set({ items: body.items, set_by: actor.accountId, set_at: sql<Date>`now()` })
+            .where('class_id', '=', classId)
+            .execute();
+        } else {
+          await trx
+            .insertInto('equipping_quizzes')
+            .values({ class_id: classId, items: body.items, set_by: actor.accountId })
+            .execute();
+        }
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'equipping_quiz.set',
+          targetType: 'equipping_class',
+          targetId: classId,
+          before: was ? { items: was.items } : null,
+          after: { items: body.items },
+        });
+      }
+      const response = { class_id: classId, items: body.items };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/quiz-tries`: one try's score, every score kept (decision 0501,
+   * point 18). The first try, or a retake after a failed one, never past the third and none
+   * after a pass (owner, 2026-11-26). Any try's score may be corrected until posting, the score
+   * it replaces kept in its history; a try corrected to a pass closes every later try, kept and
+   * no longer counted (owner, 2026-11-26, "Yes, all three").
+   */
+  async recordQuizTry(
+    actor: Actor,
+    classId: string,
+    body: RecordQuizTryDto,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.db.transaction().execute(async (trx) => {
+      await this.solWriteWithin(trx, actor, classId, 'records the quiz');
+      const quiz = await trx
+        .selectFrom('equipping_quizzes')
+        .select('items')
+        .where('class_id', '=', classId)
+        .forShare()
+        .executeTakeFirst();
+      if (!quiz) {
+        throw new InvariantViolationError('Enter the quiz’s number of items first.', {
+          field: 'try',
+        });
+      }
+      if (body.score > quiz.items) {
+        throw new ValidationFailedError(`A score is at most the quiz’s ${quiz.items} items.`, {
+          field: 'score',
+        });
+      }
+      const student = await this.studentWithin(trx, classId, body.enrollment_id);
+      const tries = await trx
+        .selectFrom('equipping_quiz_tries')
+        .select(['id', 'try', 'score'])
+        .where('enrollment_id', '=', student.id)
+        .where('superseded_at', 'is', null)
+        .orderBy('try')
+        .forUpdate()
+        .execute();
+      const same = tries.find((t) => t.try === body.try);
+      if (!same) {
+        if (body.try !== tries.length + 1) {
+          throw new ValidationFailedError(`The next try to record is try ${tries.length + 1}.`, {
+            field: 'try',
+          });
+        }
+        if (tries.some((t) => passesQuiz(t.score, quiz.items))) {
+          throw new InvariantViolationError('They passed the quiz, so they take no retake.', {
+            field: 'try',
+          });
+        }
+      }
+      // A try corrected to a pass leaves no retake standing after it: each later try is closed,
+      // kept in its history and no longer counted.
+      const later =
+        same && passesQuiz(body.score, quiz.items) ? tries.filter((t) => t.try > body.try) : [];
+      if (!same || same.score !== body.score) {
+        if (same) {
+          await trx
+            .updateTable('equipping_quiz_tries')
+            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+            .where('id', 'in', [same.id, ...later.map((t) => t.id)])
+            .execute();
+        }
+        await trx
+          .insertInto('equipping_quiz_tries')
+          .values({
+            enrollment_id: student.id,
+            try: body.try,
+            score: body.score,
+            recorded_by: actor.accountId,
+          })
+          .execute();
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'equipping_quiz.try_recorded',
+          targetType: 'person',
+          targetId: student.person_id,
+          before: same ? { class_id: classId, try: body.try, score: same.score } : null,
+          after: {
+            class_id: classId,
+            try: body.try,
+            score: body.score,
+            items: quiz.items,
+            ...(later.length > 0
+              ? { not_counted: later.map((t) => ({ try: t.try, score: t.score })) }
+              : {}),
+          },
+        });
+      }
+      const response = {
+        class_id: classId,
+        enrollment_id: student.id,
+        try: body.try,
+        score: body.score,
+        passed: passesQuiz(body.score, quiz.items),
+        not_counted: later.map((t) => t.try),
+      };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * `POST /equipping/classes/{id}/books`: whether a SOL student read the book (decision 0501,
+   * point 18), recorded and corrected by the Teacher until posting (owner, 2026-11-26).
+   */
+  async recordBook(
+    actor: Actor,
+    classId: string,
+    body: RecordBookDto,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    return this.db.transaction().execute(async (trx) => {
+      await this.solWriteWithin(trx, actor, classId, 'records the book');
+      const student = await this.studentWithin(trx, classId, body.enrollment_id);
+      const was = await trx
+        .selectFrom('equipping_books')
+        .select(['id', 'read'])
+        .where('enrollment_id', '=', student.id)
+        .where('superseded_at', 'is', null)
+        .forUpdate()
+        .executeTakeFirst();
+      if ((was?.read ?? false) !== body.read || (!was && body.read)) {
+        if (was) {
+          await trx
+            .updateTable('equipping_books')
+            .set({ superseded_at: sql<Date>`now()`, superseded_by: actor.accountId })
+            .where('id', '=', was.id)
+            .execute();
+        }
+        await trx
+          .insertInto('equipping_books')
+          .values({ enrollment_id: student.id, read: body.read, recorded_by: actor.accountId })
+          .execute();
+        await this.audit.writeWithin(trx, {
+          actorId: actor.accountId,
+          action: 'equipping_book.recorded',
+          targetType: 'person',
+          targetId: student.person_id,
+          before: was ? { class_id: classId, read: was.read } : null,
+          after: { class_id: classId, read: body.read },
+        });
+      }
+      const response = { class_id: classId, enrollment_id: student.id, read: body.read };
+      await this.idempotency.completeWithin(trx, { ...claim, status: 200, body: response });
+      return response;
+    });
+  }
+
+  /**
+   * The preamble every SOL record write shares: the class locked, the Teacher's (or the Admin's),
+   * not cancelled, not posted, and SOL's (decision 0514; owner rulings of 2026-11-26).
+   */
+  private async solWriteWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    classId: string,
+    what: string,
+  ): Promise<ClassRow> {
+    const cls = await this.lockClassWithin(trx, classId);
+    const standing = await this.standingOf(trx, actor, cls);
+    if (!standing.teaches && !standing.wide) {
+      throw new ScopeDeniedError(`Only the class’s Teacher ${what} (SKILL.md section 29).`);
+    }
+    this.refuseCancelled(cls);
+    await this.refusePostedWithin(trx, cls);
+    if (cls.level === 'LIFE_CLASS') {
+      throw new InvariantViolationError(
+        `${cls.name} is a Life Class. The memory verse, devotional, quiz and book are SOL’s.`,
+        { field: 'class_id' },
+      );
+    }
+    return cls;
+  }
+
+  /** A student enrolled in the class now, or `NOT_FOUND`. */
+  private async studentWithin(
+    trx: Transaction<Database>,
+    classId: string,
+    enrollmentId: string,
+  ): Promise<{ id: string; registration_id: string; started_at: Date; person_id: string }> {
+    const student = await trx
+      .selectFrom('equipping_enrollments as e')
+      .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+      .select(['e.id', 'e.registration_id', 'e.started_at', 'r.person_id'])
+      .where('e.id', '=', enrollmentId)
+      .where('e.class_id', '=', classId)
+      .where('e.ended_at', 'is', null)
+      .executeTakeFirst();
+    if (!student) {
+      throw new NotFoundError('No such student in this class.', { field: 'enrollment_id' });
+    }
+    return student;
   }
 
   // ---------------------------------------------------------------------------
@@ -1123,7 +1929,7 @@ export class EquippingAttendanceService {
     const all = [...own, ...kept.filter((row) => !own.some((each) => each.id === row.id))];
     const classIds = [...new Set(all.map((row) => row.class_id))];
     const enrollmentIds = all.map((row) => row.id);
-    const [lessons, marks, makeUps] = await Promise.all([
+    const [lessons, marks, makeUps, brought] = await Promise.all([
       executor
         .selectFrom('equipping_lessons')
         .select(['id', 'class_id', 'lesson', 'held_on'])
@@ -1131,13 +1937,19 @@ export class EquippingAttendanceService {
         .execute(),
       executor
         .selectFrom('equipping_marks')
-        .select(['lesson_id', 'enrollment_id', 'came'])
+        .select(['lesson_id', 'enrollment_id', 'came', 'verse', 'devotional'])
         .where('enrollment_id', 'in', enrollmentIds)
         .where('superseded_at', 'is', null)
         .execute(),
       executor
         .selectFrom('equipping_make_ups')
-        .select(['lesson_id', 'enrollment_id', 'made_up_on'])
+        .select(['lesson_id', 'enrollment_id', 'made_up_on', 'verse', 'devotional'])
+        .where('enrollment_id', 'in', enrollmentIds)
+        .where('superseded_at', 'is', null)
+        .execute(),
+      executor
+        .selectFrom('equipping_items_brought')
+        .select(['lesson_id', 'enrollment_id', 'item', 'brought_on', 'recorded_by'])
         .where('enrollment_id', 'in', enrollmentIds)
         .where('superseded_at', 'is', null)
         .execute(),
@@ -1146,6 +1958,30 @@ export class EquippingAttendanceService {
     const madeUpOf = new Map(
       makeUps.map((row) => [`${row.lesson_id}:${row.enrollment_id}`, String(row.made_up_on)]),
     );
+    const makeUpRowOf = new Map(
+      makeUps.map((row) => [`${row.lesson_id}:${row.enrollment_id}`, row]),
+    );
+    const markRowOf = new Map(marks.map((row) => [`${row.lesson_id}:${row.enrollment_id}`, row]));
+    const broughtOf = new Map(
+      brought.map((row) => [
+        `${row.lesson_id}:${row.enrollment_id}:${row.item}`,
+        { on: String(row.brought_on), by: row.recorded_by },
+      ]),
+    );
+    // SOL's two ticks for one lesson of one enrollment: the mark's for a student who came, the
+    // make-up's for one who did not, and the day each was brought if it came late.
+    const itemsOf = (lessonId: string, enrollmentId: string, came: boolean) => {
+      const key = `${lessonId}:${enrollmentId}`;
+      const source = came ? markRowOf.get(key) : makeUpRowOf.get(key);
+      return {
+        verse: source?.verse ?? null,
+        devotional: source?.devotional ?? null,
+        verseBroughtOn: broughtOf.get(`${key}:VERSE`)?.on ?? null,
+        devotionalBroughtOn: broughtOf.get(`${key}:DEVOTIONAL`)?.on ?? null,
+        verseBroughtBy: broughtOf.get(`${key}:VERSE`)?.by ?? null,
+        devotionalBroughtBy: broughtOf.get(`${key}:DEVOTIONAL`)?.by ?? null,
+      };
+    };
     const enrollmentById = new Map(all.map((row) => [row.id, row]));
 
     const markKeys = new Set(marks.map((row) => `${row.lesson_id}:${row.enrollment_id}`));
@@ -1202,6 +2038,7 @@ export class EquippingAttendanceService {
           beforeJoining: false,
           fromClass:
             mark.enrollment_id === row.enrollment_id ? null : fromClassOf(mark.enrollment_id),
+          ...itemsOf(lesson.id, mark.enrollment_id, mark.came),
         });
       }
       // **A make-up of a lesson held before they joined carries with a move** (owner,
@@ -1225,6 +2062,7 @@ export class EquippingAttendanceService {
           madeUpOn: String(makeUp.made_up_on),
           beforeJoining: true,
           fromClass: fromClassOf(makeUp.enrollment_id),
+          ...itemsOf(lesson.id, makeUp.enrollment_id, false),
         });
       }
       // The latest enrollment first among the earlier ones, so a lesson recorded in two earlier
@@ -1252,6 +2090,7 @@ export class EquippingAttendanceService {
             madeUpOn: madeUpOf.get(`${lesson.id}:${row.enrollment_id}`) ?? null,
             beforeJoining: true,
             fromClass: null,
+            ...itemsOf(lesson.id, row.enrollment_id, false),
           });
         }
       }

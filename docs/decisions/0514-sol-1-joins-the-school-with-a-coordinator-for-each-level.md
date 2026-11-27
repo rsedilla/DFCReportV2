@@ -93,6 +93,21 @@ words (*✓ Passed*, *Not yet passed · 2 retakes left*), *Book read*, and *Add 
 far* has *L1* to *L10*, *Verses* and *Devotionals* counted out of ten, *Quiz*, *Book* and *Still
 missing*.
 
+**The Teacher records and corrects the quiz and the book until final grades are posted** (owner,
+2026-11-26, "Until posting, fixable"), as make-ups are; a corrected score keeps the score it
+replaces, and after posting only the Admin changes anything. **A retake follows a failed try**
+(owner, 2026-11-26, "Only after a failed try"): *Add a retake* is offered only while the last try
+is under 70%, never past the third try, and none after a pass. **Any try's score may be
+corrected** (owner, 2026-11-26, "Yes, all three", from screenshots, as Canvas adjusts any single
+attempt): each try carries its own *Correct*, and the corrected try shows the score it was
+corrected from, by whom and when. A try corrected to a pass leaves every later try **kept and not
+counted**, struck through with *Not counted: try N passed. Kept in history.*, so no later try
+rests on a retake the corrected score never allowed; a later correction back to a fail leaves
+those tries as they are, and the Teacher enters the retake again. **The number of items is
+entered once and fixed once the first score is recorded** (owner, 2026-11-26, the same answer, as
+Moodle locks a quiz's questions once it has attempts): until then it may be put right, and after
+it every score is read against it.
+
 **9. An absent student's verse and devotional are ticked at the make-up** (owner, 2026-11-24,
 "A"). The lesson's list reads *At make-up* in their place, and *Record make-up* carries the two
 ticks for the lesson made up.
@@ -104,6 +119,11 @@ what is brought*, which asks what was brought and the day. The Teacher ticks the
 grades are posted. An absent student is listed only once their make-up is recorded. A late tick
 counts as an on-time one and carries no *late* mark, a checklist grade having no points to take
 off.
+**A late tick made by mistake is unticked** (owner, 2026-11-26, "Yes, all three", from
+screenshots, as Google Classroom returns a turned-in piece of work): the card carries *Brought
+late*, one row a lesson's verse or devotional ticked there, with the day it was brought and who
+ticked it, and *Untick*. The Teacher unticks until final grades are posted; the tick is closed and
+kept, and what it covered is owed again. The card shows while anything is owed or brought late.
 
 ## Final grades and Training
 
@@ -137,13 +157,23 @@ registration of SOL 1; a SOL 1 class naming no Encounter weekend; each level's o
 codes, and a SOL 1 manual left unticked named in them, all database constraints); the tick, the
 Coordinators list and the levels a Coordinator holds; the level gate on every Coordinator route and
 on the Coordinator's view of a register; SOL 1's requirements, read through Conquest and Training;
-and the three screens. Points 8 to 14 are ruled and not built; until each is, what Section 29 says
-of it describes no route. **Until then a SOL 1 class reaches none of Life Class's register,
-grades or posting**, which would grade it as nine lessons with an Encounter and file a Life Class
-graduation: opening its register, saving a lesson, recording a make-up, reading or checking its
-grades and posting it are refused `INVARIANT_VIOLATION`; it is left out of a Teacher's and a
-Guide's classes, a leader's people in the school and the Registrar's *Final Grades*; and the
-Coordinator's *Classes* shows no lesson line or *Grades* for it. Each refusal goes with the step
-that builds what it stands in for.
+and the three screens.
+
+Points 8 to 10, the second step: migration `0061_equipping_sol_register.sql` (a SOL class's ten
+lessons, held to its level by a trigger; the memory verse and devotional on a lesson's mark for
+whoever came and on a make-up, held to the level by a trigger; a verse or devotional brought late;
+the quiz's number of items, each try's score and *Book read*, each kept when corrected and never
+deleted); the register's tabs, ticks, make-up ticks, *Verses and devotionals still owed* with
+*Brought late* and *Untick*, *Quiz and book* with a *Correct* on every try, and *Record so far*; a SOL class among a Teacher's and a Guide's classes; and the lesson line
+on the Coordinator's *Classes*. The card lists what is owed from a lesson whose week has closed, or
+from a make-up recorded without it; while a lesson's week is open its own tab is where the two are
+ticked.
+
+Points 11 to 14 are ruled and not built; until each is, what Section 29 says of it describes no
+route. **Until then a SOL 1 class reaches none of Life Class's grades or posting**, which would
+grade it as nine lessons with an Encounter and file a Life Class graduation: reading or checking
+its grades and posting it are refused `INVARIANT_VIOLATION`; it is left out of a leader's people in
+the school and the Registrar's *Final Grades*; and the Coordinator's *Classes* shows no *Grades*
+for it. Each refusal goes with the step that builds what it stands in for.
 
 Previous: [2026-11-23 — The Admin changes a lesson after posting, and the grade is worked out again](0513-the-admin-changes-a-lesson-after-posting-and-the-grade-is-worked-out-again.md)
