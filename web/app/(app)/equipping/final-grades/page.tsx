@@ -13,7 +13,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import {
   currentTerm,
-  LEVELS_THAT_OPEN,
+  EQUIPPING_LEVELS,
   getFinalGrades,
   LEVEL_LABELS,
   listFinalGradeClasses,
@@ -50,7 +50,7 @@ export default function FinalGradesPage() {
         <div className={CONTROL_BAR}>
           <TermPicker term={term} onChange={setTerm} />
           {/* Each level's classes, as Registration and Enrollment pick them (decision 0514). */}
-          <LevelPicker levels={LEVELS_THAT_OPEN} value={term.level} onChange={(level) => setTerm({ ...term, level })} />
+          <LevelPicker levels={EQUIPPING_LEVELS} value={term.level} onChange={(level) => setTerm({ ...term, level })} />
           <div className="flex flex-wrap gap-2" role="group" aria-label="Classes">
             {list.map((each) => (
               <Button
@@ -115,6 +115,7 @@ function ClassGradesView({ data }: { data: ClassGrades }) {
           onClose={() => setChanging(null)}
           student={student}
           className={data.class.name}
+          levelName={LEVEL_LABELS[data.class.level]}
           postedAt={data.status.posted?.at ?? null}
         />
       ) : student ? (

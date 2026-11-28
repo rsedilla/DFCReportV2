@@ -19,8 +19,9 @@ import type { Database } from '../../src/database/schema';
 import type { TestAccount, TestPerson } from '../setup/fixtures';
 
 /**
- * SOL 2 joins the school (SKILL.md sections 7 and 29, decisions 0501 and 0516), the first step:
- * its Coordinator, its classes, its registration and its Guides.
+ * SOL 2 joins the school (SKILL.md sections 7 and 29, decisions 0501 and 0516): its Coordinator,
+ * its classes, its registration, its Guides and Training. Its register, quiz, book and final
+ * grades are pinned with SOL 1's in `equipping-sol-register.e2e.spec.ts`, run for both levels.
  *
  * What is pinned, each from the ruling rather than from the service:
  *
@@ -30,9 +31,10 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *   - SOL 2's requirements: SOL 1 passed and the leadership of an `ACTIVE` Cell now, read from
  *     the records, and the SOL 2 book, each warning rather than refusing, the reason then
  *     required; a Cell closed, `CREATED_IN_ERROR` included, leads nothing;
- *   - **no SOL 2 class opens before step 2** (decision 0516, point 4), the Admin included, a
- *     Coordinator of another level being refused for the level first;
- *   - a SOL 2 Guide has passed SOL 3, one level ahead, and SOL 2 is not enough;
+ *   - a SOL 2 class opens (step 2), names no Encounter weekend, and is guided by somebody who has
+ *     passed SOL 3, one level ahead, SOL 2 not being enough;
+ *   - once a SOL 2 class opens, only the Admin ticks SOL 2 in Training (point 1), a SOL 1 class
+ *     or a cancelled SOL 2 class making nothing of SOL 2 the school's;
  *   - the Admin's Coordinators list names SOL 2's Coordinators.
  *
  * Fixture names are invented (CLAUDE.md, Secrets).
@@ -216,36 +218,78 @@ describe('SOL 2 in the school (section 29, decision 0516)', () => {
   });
 
   describe('a SOL 2 class', () => {
-    it('is not opened before step 2, by its Coordinator or the Admin (decision 0516, point 4)', async () => {
-      for (const as of [sol2Coordinator, admin]) {
-        const refused = await openSol2(as).expect(409);
-        expect(errorCode(refused)).toBe('INVARIANT_VIOLATION');
-        expect((refused.body as { error: { message: string } }).error.message).toBe(
-          'A SOL 2 class can be opened once DREAMS has SOL 2’s register and final grades.',
-        );
-      }
-      const classes = await db.selectFrom('equipping_classes').select('id').execute();
-      expect(classes).toEqual([]);
+    it('is opened by its Coordinator and the Admin, with no Encounter weekend (step 2)', async () => {
+      const opened = await openSol2(sol2Coordinator).expect(201);
+      expect((opened.body as { encounter_season_id: unknown }).encounter_season_id).toBeNull();
+      // The Admin keeps every Coordinator step at every level (decision 0501, point 2).
+      await openSol2(admin, { name: 'SOL 2 B' }).expect(201);
     });
 
-    it('is refused by the database too, until step 2 widens it', async () => {
-      await expect(
-        sql`INSERT INTO equipping_classes (level, term_year, term_number, name, day_of_week,
-              time_of_day, first_lesson_on, created_by)
-            VALUES ('SOL_2', 2027, 1, 'SOL 2 A', 4, '19:00', '2027-01-14', ${admin.id})`.execute(
-          db,
-        ),
-      ).rejects.toThrow(/equipping_classes_level/);
-    });
+    it('is guided by somebody who has passed SOL 3, and SOL 2 is not enough', async () => {
+      const id = ((await openSol2(sol2Coordinator).expect(201)).body as { id: string }).id;
+      await post(sol2Coordinator, `equipping/classes/${id}/guides`, { person_id: tess.id }).expect(
+        201,
+      );
+      const refused = await post(sol2Coordinator, `equipping/classes/${id}/guides`, {
+        person_id: gil.id,
+      }).expect(409);
+      expect(errorCode(refused)).toBe('INVARIANT_VIOLATION');
+      expect((refused.body as { error: { message: string } }).error.message).toContain(
+        'A SOL 2 Guide has passed SOL 3',
+      );
 
-    it('is to be guided by somebody who has passed SOL 3, and SOL 2 is not enough', async () => {
-      // The Guide search reads the rule now; naming a Guide waits for a SOL 2 class (step 2).
       const search = await get(sol2Coordinator, 'equipping/guides?q=Tess&level=SOL_2').expect(200);
       expect((search.body as { data: { qualifies: string }[] }).data).toEqual([
         expect.objectContaining({ qualifies: 'Passed SOL 3' }),
       ]);
       const none = await get(sol2Coordinator, 'equipping/guides?q=Gil&level=SOL_2').expect(200);
       expect((none.body as { data: unknown[] }).data).toEqual([]);
+    });
+  });
+
+  describe('Training once a SOL 2 class opens (decision 0516, point 1)', () => {
+    const tick = (as: TestAccount, personId: string) =>
+      post(as, 'training/submit', {
+        changes: [{ person_id: personId, program: 'SOL_2', graduated: true }],
+      });
+    const schoolPrograms = async (as: TestAccount) =>
+      ((await get(as, 'training/people').expect(200)).body as { school_programs: string[] })
+        .school_programs;
+
+    it('lets a leader tick SOL 2 until a SOL 2 class opens, then only the Admin', async () => {
+      const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
+      expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS']);
+      await tick(ramonAccount, wil.id).expect(201);
+
+      await openSol2(sol2Coordinator).expect(201);
+      expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS', 'SOL_2']);
+      // Tess holds SOL 3 and no SOL 2 (Gil holds SOL 2 already).
+      const refused = await tick(ramonAccount, tess.id).expect(403);
+      expect(errorCode(refused)).toBe('SCOPE_DENIED');
+      // The Admin ticks it for somebody who finished before the school.
+      await tick(admin, tess.id).expect(201);
+    });
+
+    it('is not the school’s because a SOL 1 class opened, nor once its own class is cancelled', async () => {
+      const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
+      await post(sol1Coordinator, 'equipping/classes', {
+        level: 'SOL_1',
+        term_year: 2027,
+        term_number: 1,
+        name: 'SOL 1 A',
+        day_of_week: 3,
+        time_of_day: '19:00',
+        place: 'Room 3',
+        first_lesson_on: '2027-01-13',
+      }).expect(201);
+      expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS', 'SOL_1']);
+      await tick(ramonAccount, wil.id).expect(201);
+
+      const classId = ((await openSol2(sol2Coordinator).expect(201)).body as { id: string }).id;
+      await post(sol2Coordinator, `equipping/classes/${classId}/cancel`, {
+        reason: 'The Teacher moved to another Network',
+      }).expect(200);
+      expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS', 'SOL_1']);
     });
   });
 
@@ -316,6 +360,17 @@ describe('SOL 2 in the school (section 29, decision 0516)', () => {
         'equipping/registrations/counts?term_year=2027&term_number=1',
       ).expect(200);
       expect(counts.body).toEqual(expect.objectContaining({ SOL_2: 1 }));
+    });
+
+    it('enrolls into a SOL 2 class with no birthday, SOL having no Encounter', async () => {
+      await graduate(wil, 'SOL_1');
+      const registration = (await register({ manual_confirmed: true }).expect(201)).body as {
+        id: string;
+      };
+      const id = ((await openSol2(sol2Coordinator).expect(201)).body as { id: string }).id;
+      await post(registrar, `equipping/classes/${id}/enrollments`, {
+        registration_ids: [registration.id],
+      }).expect(201);
     });
 
     it('keeps each level’s codes in the database, and a book not ticked named in them', async () => {

@@ -522,7 +522,7 @@ export class EquippingAttendanceService {
     if (cls.cancelled_at !== null) {
       throw new InvariantViolationError(`${cls.name} was cancelled.`, { field: 'class_id' });
     }
-    // SOL 1's register is built (decision 0514, points 8 to 10); its grades come in step 3.
+    // A SOL class's register: SOL 1's (decision 0514, points 8 to 10), and SOL 2's the same (0516).
 
     let enrolled = await this.db
       .selectFrom('equipping_enrollments as e')

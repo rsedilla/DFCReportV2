@@ -95,7 +95,7 @@ const ROLE_WORDS: Record<ClassAttendance['role'], string> = {
 function ClassBody({ data }: { data: ClassAttendance }) {
   // SOL's ten lessons and its quiz and book (decision 0514, point 8); Life Class's nine with the
   // Encounter, the Registrar's, as lesson 5.
-  const sol = data.class.level === 'SOL_1';
+  const sol = data.class.level !== 'LIFE_CLASS';
   const [chosen, setChosen] = useState<number | 'QUIZ'>(() => firstOpen(data.lessons));
   const lesson = data.lessons.find((l) => l.lesson === chosen) ?? data.lessons[0];
   const columns = sol ? data.lessons.map((l) => l.lesson) : COLUMNS;
@@ -265,7 +265,7 @@ function LessonForm({ data, lesson }: { data: ClassAttendance; lesson: ClassLess
     () => new Set(data.students.filter((s) => markHere(s, lesson.lesson)?.came).map((s) => s.enrollment_id)),
   );
   // SOL ticks the memory verse and devotional of whoever came (decision 0514, point 8).
-  const sol = data.class.level === 'SOL_1';
+  const sol = data.class.level !== 'LIFE_CLASS';
   const [verse, setVerse] = useState<Set<string>>(
     () => new Set(data.students.filter((s) => markHere(s, lesson.lesson)?.verse).map((s) => s.enrollment_id)),
   );
@@ -786,7 +786,7 @@ function Owed({ data }: { data: ClassAttendance }) {
       <MakeUpDialog
         key={making ? `${making.enrollment_id}:${making.lesson}` : 'none'}
         classId={data.class.id}
-        sol={data.class.level === 'SOL_1'}
+        sol={data.class.level !== 'LIFE_CLASS'}
         owed={making}
         onClose={() => setMaking(null)}
       />

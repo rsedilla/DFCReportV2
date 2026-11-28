@@ -15,7 +15,6 @@ import {
   DAY_NAMES,
   EQUIPPING_LEVELS,
   LEVEL_LABELS,
-  LEVELS_THAT_OPEN,
   currentTerm,
   enroll,
   getClass,
@@ -28,7 +27,6 @@ import {
   type EquippingClass,
   type Term,
   listName,
-  notOpenYet,
 } from '@/lib/equipping';
 import { getMe, holdsWholeChurch } from '@/lib/me';
 import { describeFailure } from '@/lib/messages';
@@ -104,17 +102,8 @@ export default function EnrollmentPage() {
       </div>
       <FailureNotice failure={classes.isError ? describeFailure(classes.error) : null} />
       {classes.data && classes.data.data.length === 0 ? (
-        <p className="text-muted mt-4 text-sm">
-          {LEVELS_THAT_OPEN.includes(term.level) ? (
-            <>
-              No {LEVEL_LABELS[term.level]} class is open in {termLabel(term)} yet.{' '}
-              {opens ? 'Open one under Classes.' : `The ${LEVEL_LABELS[term.level]} Coordinator opens it.`}
-            </>
-          ) : (
-            // No SOL 2 class opens before step 2 (decision 0516, point 4).
-            notOpenYet(term.level)
-          )}
-        </p>
+        <p className="text-muted mt-4 text-sm">No {LEVEL_LABELS[term.level]} class is open in {termLabel(term)} yet.{' '}
+          {opens ? 'Open one under Classes.' : `The ${LEVEL_LABELS[term.level]} Coordinator opens it.`}</p>
       ) : null}
       {classId ? <ClassView key={classId} classId={classId} classes={classes.data?.data ?? []} /> : null}
     </EquippingFrame>

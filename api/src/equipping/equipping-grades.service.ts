@@ -440,9 +440,9 @@ export class EquippingGradesService {
             },
           });
         }
-        // **A posted Passed files Life Class from the school** (decision 0509), and SOL 1 from a
-        // SOL 1 class (decision 0514, point 13), dated the day it was posted. One who already
-        // holds it keeps what they hold.
+        // **A posted Passed files the class's level from the school**: Life Class (decision 0509),
+        // SOL 1 (decision 0514, point 13) or SOL 2 (decision 0516), dated the day it was posted.
+        // One who already holds it keeps what they hold.
         const postedOn = manilaDayOf(posting.posted_at);
         // In person order, as a Training save locks them (section 24).
         const passed = standing.students
@@ -451,7 +451,7 @@ export class EquippingGradesService {
         for (const s of passed) {
           await this.training.fileFromSchoolWithin(trx, {
             personId: s.person_id,
-            program: standing.class.level === 'LIFE_CLASS' ? 'LIFE_CLASS' : 'SOL_1',
+            program: standing.class.level,
             graduatedOn: postedOn,
             accountId: actor.accountId,
           });
@@ -1001,7 +1001,7 @@ export class EquippingGradesService {
       student.enrollment_id,
     );
     const after = solGradeOf(register, checklist);
-    // What the school's SOL 1 stands filed under now: the latest change's instant, or posting's.
+    // What the school's SOL level stands filed under now: the latest change's instant, or posting's.
     const current = await executor
       .selectFrom('equipping_current_grades')
       .select('life_class_filed_at')
@@ -1062,7 +1062,7 @@ export class EquippingGradesService {
         encounter_before: null,
         encounter_after: null,
         enrollment_effect: null,
-        // What the school's SOL 1 stands filed under after it, as Life Class's is kept.
+        // What the school's SOL level stands filed under after it, as Life Class's is kept.
         life_class_filed_at:
           plan.after.grade !== 'PASSED' ? null : (plan.filedAt ?? sql<Date>`now()`),
         changed_by: actor.accountId,
@@ -1098,18 +1098,19 @@ export class EquippingGradesService {
       throw new Error('A grade change wrote records whose grade differs from the one planned.');
     }
 
-    // Training follows the grade (decision 0514, point 13): SOL 1 filed from the school, or withdrawn.
+    // Training follows the grade (decision 0514, point 13; decision 0516): the class's SOL level
+    // filed from the school, or withdrawn.
     if (plan.filedAt === null && plan.after.grade === 'PASSED') {
       await this.training.fileFromSchoolWithin(trx, {
         personId: student.person_id,
-        program: 'SOL_1',
+        program: standing.class.level,
         graduatedOn: manilaDayOf(recorded.changed_at),
         accountId: actor.accountId,
       });
     } else if (plan.filedAt !== null && plan.after.grade !== 'PASSED') {
       await this.training.withdrawFromSchoolWithin(trx, {
         personId: student.person_id,
-        program: 'SOL_1',
+        program: standing.class.level,
         graduatedOn: manilaDayOf(plan.filedAt),
         accountId: actor.accountId,
         reason: body.details,
