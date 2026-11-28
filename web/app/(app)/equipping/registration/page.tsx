@@ -11,6 +11,7 @@ import { FailureNotice } from '@/components/ui/failure-notice';
 import { SearchField } from '@/components/ui/field';
 import { CONTROL_BAR } from '@/components/ui/frame';
 import { HeaderCell, Table, rowClasses } from '@/components/ui/table';
+import { Tag } from '@/components/ui/tag';
 import {
   EQUIPPING_LEVELS,
   LEVEL_LABELS,
@@ -83,6 +84,36 @@ export default function RegistrationPage() {
   );
 }
 
+function cancellable(row: Registration): boolean {
+  return row.status === 'REGISTERED' || row.status === 'REGISTERED_WITH_EXCEPTION';
+}
+
+/** The leader of the Cell they attend (decision 0518), or why there is none. */
+function cellLeaderText(row: Registration): string {
+  if (row.cell_leader_name !== null) {
+    return row.cell_leader_name;
+  }
+  return row.leads_a_cell ? 'Leads a Cell' : 'No Cell yet';
+}
+
+/**
+ * The status as a short label (decision 0518), each carrying its meaning in its words and a tick
+ * or an exclamation mark, never in its colour alone (1.4.1).
+ */
+function StatusPill({ status }: { status: Registration['status'] }) {
+  if (status === 'REGISTERED_WITH_EXCEPTION') {
+    return (
+      <Tag appearance="outline">
+        !<span className="sr-only"> Registered</span>&nbsp;With exception
+      </Tag>
+    );
+  }
+  if (status === 'CANCELLED') {
+    return <span className="text-muted text-sm">{STATUS_LABELS[status]}</span>;
+  }
+  return <Tag>&#10003;&nbsp;{STATUS_LABELS[status]}</Tag>;
+}
+
 function RegistrationList({ term }: { term: Term }) {
   const [cursor, setCursor] = useState<string | null>(null);
   const list = useQuery({
@@ -90,6 +121,8 @@ function RegistrationList({ term }: { term: Term }) {
     queryFn: ({ signal }) => listRegistrations(term, cursor, signal),
   });
   const [cancelling, setCancelling] = useState<Registration | null>(null);
+  // How many rows the pages before this one held, so the numbers run on (decision 0518).
+  const [offset, setOffset] = useState(0);
 
   if (list.isError) {
     return (
@@ -116,45 +149,57 @@ function RegistrationList({ term }: { term: Term }) {
           <tr>
             <HeaderCell>Name</HeaderCell>
             {/* Under the name on a phone, so the table fits 320px. */}
-            <HeaderCell className="hidden sm:table-cell">Leader</HeaderCell>
+            <HeaderCell className="hidden sm:table-cell">Cell Leader</HeaderCell>
             <HeaderCell className="hidden sm:table-cell">Birthday</HeaderCell>
             <HeaderCell>Status</HeaderCell>
-            <HeaderCell>
+            <HeaderCell className="hidden sm:table-cell">
               <span className="sr-only">Action</span>
             </HeaderCell>
           </tr>
         </thead>
         <tbody>
-          {list.data.data.map((row) => (
+          {list.data.data.map((row, index) => (
             <tr key={row.id} className={rowClasses}>
+              {/* A number and the name alone (decision 0518): the requirements not met and the
+                  reason stay on the registration, and leave the list. */}
               <td className="px-3 py-3 align-top">
-                {listName(row.person)}
-                {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
-                <span className="text-muted block text-sm sm:hidden">
-                  {row.leader_name ?? 'No leader yet'} ·{' '}
-                  {row.birthday_recorded ? 'birthday recorded' : 'birthday missing'}
-                </span>
-                {row.exception_reason ? (
-                  <p className="text-muted mt-1 text-sm">
-                    {/* Which requirement was set aside, so the Admin reviewing it sees (decision 0514). */}
-                    {row.unmet && row.unmet.length > 0
-                      ? `Not met: ${row.unmet.map((code) => REQUIREMENT_LABELS[code]).join(', ')}. `
-                      : null}
-                    Why: {row.exception_reason}
-                  </p>
+                <div className="flex items-start gap-2">
+                  <span className="text-muted shrink-0 tabular-nums sm:w-7 sm:text-right">{offset + index + 1}.</span>
+                  <div>
+                    <span className="font-semibold">{listName(row.person)}</span>
+                    {tryLabel(row.try_number) ? <span className="text-muted text-sm"> · {tryLabel(row.try_number)}</span> : null}
+                    <span className="text-muted block text-sm sm:hidden">
+                      {cellLeaderText(row)} ·{' '}
+                      {row.birthday_recorded ? 'birthday recorded' : 'birthday missing'}
+                    </span>
+                  </div>
+                </div>
+              </td>
+              <td className={`hidden px-3 py-3 align-top sm:table-cell ${row.cell_leader_name === null ? 'text-muted' : ''}`}>
+                {cellLeaderText(row)}
+              </td>
+              <td className="hidden px-3 py-3 align-top sm:table-cell">
+                {row.birthday_recorded ? (
+                  <span className="text-muted text-sm">&#10003; Recorded</span>
+                ) : (
+                  <Tag appearance="outline">!&nbsp;Missing</Tag>
+                )}
+              </td>
+              <td className="px-3 py-3 align-top">
+                <StatusPill status={row.status} />
+                {row.class ? <span className="text-muted mt-1 block text-sm">{row.class.name}</span> : null}
+                {/* Under the status on a phone, where a column of its own runs past 320px. */}
+                {cancellable(row) ? (
+                  <div className="mt-2 sm:hidden">
+                    <Button type="button" variant="secondary" onClick={() => setCancelling(row)}>
+                      Cancel<span className="sr-only"> {row.person.full_name}&rsquo;s registration</span>
+                    </Button>
+                  </div>
                 ) : null}
               </td>
-              <td className="hidden px-3 py-3 align-top sm:table-cell">{row.leader_name ?? 'No leader yet'}</td>
-              <td className="hidden px-3 py-3 align-top sm:table-cell">
-                {row.birthday_recorded ? 'Recorded' : 'Missing'}
-              </td>
-              <td className="px-3 py-3 align-top">
-                {STATUS_LABELS[row.status]}
-                {row.class ? <span className="text-muted block text-sm">{row.class.name}</span> : null}
-              </td>
-              <td className="px-3 py-3 text-right align-top">
-                {row.status === 'REGISTERED' || row.status === 'REGISTERED_WITH_EXCEPTION' ? (
-                  <Button type="button" variant="quiet" onClick={() => setCancelling(row)}>
+              <td className="hidden px-3 py-3 text-right align-top sm:table-cell">
+                {cancellable(row) ? (
+                  <Button type="button" variant="secondary" onClick={() => setCancelling(row)}>
                     Cancel<span className="sr-only"> {row.person.full_name}&rsquo;s registration</span>
                   </Button>
                 ) : null}
@@ -165,7 +210,15 @@ function RegistrationList({ term }: { term: Term }) {
       </Table>
       {list.data.next_cursor ? (
         <div className="mt-4">
-          <Button type="button" variant="secondary" onClick={() => setCursor(list.data.next_cursor)}>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              // The next page goes on counting from where this one stopped.
+              setOffset(offset + list.data.data.length);
+              setCursor(list.data.next_cursor);
+            }}
+          >
             Show more
           </Button>
         </div>

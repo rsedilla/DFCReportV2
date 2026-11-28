@@ -48,6 +48,8 @@ import type {
 } from './dto/equipping.dto';
 import { bySchoolName, schoolPerson } from './school-order';
 
+import type { PersonCells } from '../cells/cells.read.service';
+
 /** Section 12's and section 9's ladder: the fifth attendance and beyond is a Regular. */
 const REGULAR_FROM = 5;
 /**
@@ -209,6 +211,18 @@ interface EarlierTry {
   termNumber: number;
   className: string;
   reason: string;
+}
+
+/**
+ * The name of whoever leads the Cell a person attends now, or null when they attend none
+ * (decision 0518).
+ */
+function cellLeaderName(
+  cells: PersonCells | undefined,
+  leaders: ReadonlyMap<string, { fullName: string }>,
+): string | null {
+  const leaderId = cells?.membership?.leaderId ?? null;
+  return leaderId === null ? null : (leaders.get(leaderId)?.fullName ?? null);
 }
 
 /** How many tries came in terms before the given one: a term is one try (decision 0511). */
@@ -808,12 +822,23 @@ export class EquippingService {
 
     const page = rows.slice(0, limit);
     const ids = page.map((row) => row.person_id);
-    const [people, leaderNames, births, tries] = await Promise.all([
+    const [people, leaderNames, births, tries, cells] = await Promise.all([
       this.people.forDecisions(ids),
       this.people.directLeaderNamesOf(ids),
       this.people.birthDatesOf(ids),
       this.earlierTriesOf(ids, query.level),
+      this.cells.currentCellsOfMany(ids),
     ]);
+    // The leader of the Cell each person is a member of now, for the list's *Cell Leader*
+    // (decision 0518); a member of none who leads one is said to lead one.
+    const cellLeaderIds = [
+      ...new Set(
+        [...cells.values()]
+          .map((each) => each.membership?.leaderId ?? null)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const cellLeaders = await this.people.forDecisions(cellLeaderIds);
 
     return {
       data: page.map((row) => ({
@@ -823,6 +848,8 @@ export class EquippingService {
           member_id: people.get(row.person_id)?.memberId ?? null,
         },
         leader_name: leaderNames.get(row.person_id) ?? null,
+        cell_leader_name: cellLeaderName(cells.get(canonicalId(row.person_id)), cellLeaders),
+        leads_a_cell: (cells.get(canonicalId(row.person_id))?.leads.length ?? 0) > 0,
         birthday_recorded: (births.get(row.person_id) ?? null) !== null,
         status: this.statusOf(row),
         unmet: row.unmet,

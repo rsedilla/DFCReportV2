@@ -133,6 +133,10 @@ export interface Registration {
   id: string;
   person: { id: string; member_id: string | null; full_name: string | null; list_name?: string | null };
   leader_name: string | null;
+  /** Who leads the Cell they attend now, null when they attend none (decision 0518). */
+  cell_leader_name: string | null;
+  /** Whether they lead a Cell themselves, so the list says so rather than *No Cell yet*. */
+  leads_a_cell: boolean;
   birthday_recorded: boolean;
   status: RegistrationStatus;
   unmet: RequirementCode[];

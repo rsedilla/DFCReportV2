@@ -284,6 +284,49 @@ describe('Equipping (section 29, decision 0499)', () => {
       expect(audit).toEqual([{ action: 'equipping_registration.created', target_id: ben.id }]);
     });
 
+    it('names the leader of the Cell each person attends, or that they lead one (decision 0518)', async () => {
+      // Ben attends Lino's Cell, though Mario is his leader in the tree; Carlo attends none;
+      // Mario leads a Cell and is a member of none; Paco leads a Cell and is a member of Lino's.
+      const lino = await createPerson(db, { firstName: 'Lino', network: 'MENS' });
+      await assignTo(db, lino.id, mario.id);
+      const linoCell = await createCell(db, { leader: lino, dayOfWeek: 3, timeOfDay: '18:00' });
+      await db
+        .insertInto('cell_memberships')
+        .values({ cell_id: linoCell.id, person_id: ben.id, started_at: new Date() })
+        .execute();
+      const paco = await createPerson(db, { firstName: 'Paco', network: 'MENS' });
+      await assignTo(db, paco.id, mario.id);
+      await createCell(db, { leader: paco, dayOfWeek: 4, timeOfDay: '20:00' });
+      await db
+        .insertInto('cell_memberships')
+        .values({ cell_id: linoCell.id, person_id: paco.id, started_at: new Date() })
+        .execute();
+      for (const person of [ben, carlo, mario, paco]) {
+        await register(person).expect(201);
+      }
+
+      const list = (
+        await get(registrar, 'registrations?level=LIFE_CLASS&term_year=2027&term_number=1').expect(
+          200,
+        )
+      ).body as {
+        data: {
+          person: { id: string };
+          cell_leader_name: string | null;
+          leads_a_cell: boolean;
+        }[];
+      };
+      const of = (person: TestPerson) => {
+        const found = list.data.find((row) => row.person.id === person.id);
+        return [found?.cell_leader_name, found?.leads_a_cell];
+      };
+      expect(of(ben)).toEqual([expect.stringContaining('Lino'), false]);
+      expect(of(carlo)).toEqual([null, false]);
+      expect(of(mario)).toEqual([null, true]);
+      // A member of a Cell shows that Cell's leader, whether or not they lead one too.
+      expect(of(paco)).toEqual([expect.stringContaining('Lino'), true]);
+    });
+
     it('refuses a second registration for the same level and term', async () => {
       await register(ben).expect(201);
       const again = await register(ben);
