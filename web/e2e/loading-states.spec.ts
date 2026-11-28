@@ -3,11 +3,9 @@ import { expect, test, type Page } from '@playwright/test';
 import { PERSON_IN_SCOPE, mockPeople, mockSignedIn } from './mock-api';
 import {
   mockCellMeetings,
-  mockCellReport,
   mockCells,
   mockDccEvents,
   mockDccOwed,
-  mockDccReport,
   mockDccRoster,
   mockDccTwelve,
   mockMeetingsAwaiting,
@@ -38,7 +36,6 @@ async function dccReportForMay(page: Page) {
   await page.clock.setFixedTime(NOW);
   await mockSignedIn(page);
   await mockDccEvents(page);
-  await mockDccReport(page);
   await mockDccTwelve(page, { today: '2026-06-20' });
   await page.goto('/reports/dcc?month=2026-05-01');
   await expect(page.getByText('Consuelo Bautista').first()).toBeVisible();
@@ -128,8 +125,6 @@ test('a list that has not answered shows grey rows, and says Loading to a screen
   await mockCells(page);
   await mockCellMeetings(page);
   await mockDccEvents(page);
-  await mockCellReport(page);
-  await mockDccReport(page);
   await mockDccRoster(page);
   await mockDccOwed(page);
   await mockPendingDcc(page);

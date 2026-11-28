@@ -9,10 +9,8 @@ import {
 } from './mock-api';
 import {
   mockCellMeetings,
-  mockCellReport,
   mockCells,
   mockDccEvents,
-  mockDccReport,
   mockDccRoster,
   mockMeetingsAwaiting,
   mockPendingDcc,
@@ -137,8 +135,6 @@ test('Recording Progress keeps the week shown, faded, while another loads', asyn
   await mockCells(page);
   await mockCellMeetings(page);
   await mockMeetingsAwaiting(page, {});
-  await mockCellReport(page);
-  await mockDccReport(page);
   await mockDccEvents(page);
   await mockDccRoster(page);
   await mockAwaitingReassignment(page);

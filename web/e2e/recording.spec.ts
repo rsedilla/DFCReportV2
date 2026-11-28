@@ -14,12 +14,10 @@ import {
   awaitingClosedRow,
   awaitingRow,
   mockCellMeetings,
-  mockCellReport,
   mockCells,
   mockClosedDccRoster,
   mockDccEvents,
   mockDccOwed,
-  mockDccReport,
   mockLeaderDccRoster,
   OWED_LEADER_ID,
   mockDccRoster,
@@ -1674,8 +1672,6 @@ test.describe('the Record queue', () => {
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page, awaiting);
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
@@ -2213,8 +2209,6 @@ test.describe('Update Records for a Full view leader (decision 0382)', () => {
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page);
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockPendingDcc(page);
@@ -2249,8 +2243,6 @@ test.describe('the Record queue as the owner designed it (decision 0258)', () =>
     await mockWholeChurchReader(page);
     await mockCells(page);
     await mockCellMeetings(page);
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
@@ -2721,8 +2713,6 @@ test.describe('Record’s three lists (decisions 0290 and 0381)', () => {
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page);
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
@@ -3272,8 +3262,6 @@ test.describe('your month, from the queue (owner’s design, 2026-09-19)', () =>
   test('the queue does not link to it for now', async ({ page }) => {
     await page.clock.setFixedTime(JUNE_20);
     await mockMonth(page);
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
     await mockPendingDcc(page);
@@ -3300,8 +3288,6 @@ test.describe('a DCC checklist longer than one page', () => {
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page, {});
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
@@ -3360,8 +3346,6 @@ test.describe('a DCC checklist longer than one page', () => {
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page, {});
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockAwaitingReassignment(page);
     await mockPeopleWithoutACell(page);
@@ -3421,8 +3405,6 @@ test.describe('CG Records Due laid out as DCC Records Due (decision 0368)', () =
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page, {});
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);
@@ -3621,8 +3603,6 @@ test.describe('No Leader Yet for a reader who may not move people (decision 0356
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page);
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);

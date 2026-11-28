@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
-import { mockDccReport, mockDccTwelve, TWELVE } from './mock-attendance';
+import { mockDccTwelve, TWELVE } from './mock-attendance';
 
 /**
  * DCC: Weekly and Monthly, each opening on My 12, and Yearly the last 12 months (SKILL.md
@@ -53,7 +53,6 @@ async function arrange(
   if (church) {
     await mockWholeChurchReader(page);
   }
-  await mockDccReport(page);
   return mockDccTwelve(page, { today: TODAY, ...options });
 }
 
@@ -483,7 +482,6 @@ test.describe('a guard month the server disagrees with', () => {
     // 23:59 on Tuesday 30 June 2026 in Manila; the database has already reached July.
     await page.clock.setFixedTime(new Date('2026-06-30T15:59:00Z'));
     await mockSignedIn(page);
-    await mockDccReport(page);
     const asked = await mockDccTwelve(page, { today: '2026-07-01', expectPeriod: '2026-07-01' });
     await page.goto('/reports/dcc?period=week');
 

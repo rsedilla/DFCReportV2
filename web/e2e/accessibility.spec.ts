@@ -62,9 +62,7 @@ import {
   mockPastoralPath,
   mockNetworkTree,
   mockCellMembersEmpty,
-  mockCellReport,
   mockCellTwelve,
-  mockDccReport,
   mockDccRoster,
   mockDccTwelve,
   mockMeetingRoster,
@@ -129,8 +127,6 @@ async function mockDashboard(page: import('@playwright/test').Page) {
   await mockCells(page);
   await mockCellMeetings(page);
   await mockMeetingsAwaiting(page);
-  await mockCellReport(page);
-  await mockDccReport(page);
   await mockDccEvents(page);
   await mockDccRoster(page);
   await mockAwaitingReassignment(page);
@@ -3046,11 +3042,9 @@ test('every interactive target meets the 24px minimum', async ({ page }) => {
   await mockDccEvents(page);
   await mockMeetingRoster(page);
   await mockDccRoster(page);
-  await mockCellReport(page);
   // Before the Network screen's mock, whose own children route must win for its leaders.
   await mockCellTwelve(page);
   await mockDccTwelve(page);
-  await mockDccReport(page);
   await mockCellMembers(page);
   await mockPastoralPath(page);
   await mockNetworkTree(page);
@@ -3683,7 +3677,6 @@ test('a whole-church reader sees the same order, Reports opening on the DCC figu
 test('the home page lands the Senior Pastors on Reports', async ({ page }) => {
   await mockSignedIn(page);
   await mockScreens(page, 'SENIOR_PASTOR');
-  await mockDccReport(page);
 
   await page.goto('/');
 

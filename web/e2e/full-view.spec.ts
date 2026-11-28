@@ -20,11 +20,9 @@ import {
   CELL_WITH_NO_SCHEDULE,
   mockCellMeetings,
   mockCellMembers,
-  mockCellReport,
   mockCells,
   mockCellsEmpty,
   mockDccEvents,
-  mockDccReport,
   mockDccRoster,
   mockMeetingsAwaiting,
   mockPastoralPath,
@@ -1324,8 +1322,6 @@ test.describe('a Full view leader’s Recording Progress (decision 0334)', () =>
     await mockCells(page);
     await mockCellMeetings(page);
     await mockMeetingsAwaiting(page, {});
-    await mockCellReport(page);
-    await mockDccReport(page);
     await mockDccEvents(page);
     await mockDccRoster(page);
     await mockAwaitingReassignment(page);

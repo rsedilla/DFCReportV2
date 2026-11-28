@@ -9,11 +9,9 @@ import {
 import {
   PENDING_CG_ROWS,
   mockCellMeetings,
-  mockCellReport,
   mockCells,
   mockDccEvents,
   mockDccOwed,
-  mockDccReport,
   mockDccRoster,
   mockMeetingsAwaiting,
   mockPendingCg,
@@ -41,8 +39,6 @@ async function openRecord(page: Page) {
   await mockCells(page);
   await mockCellMeetings(page);
   await mockMeetingsAwaiting(page);
-  await mockCellReport(page);
-  await mockDccReport(page);
   await mockDccEvents(page);
   await mockDccRoster(page);
   await mockAwaitingReassignment(page);

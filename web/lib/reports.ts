@@ -42,108 +42,14 @@ export interface AttendanceBucket {
   completed: boolean;
 }
 
-/** Cell coverage: meetings recorded over meetings scheduled. Never divided. */
-export interface CellCoverage {
-  recorded: number;
-  scheduled: number;
-}
-
 /** DCC coverage: obligations met over obligations owed (decision 0224). */
 export interface DccCoverage {
   met: number;
   owed: number;
 }
 
-interface MonthlyCommon {
-  period: string;
-  /** Section 17: an open month's figures are still changing. */
-  open: boolean;
-  unique_people: number;
-  classification: Classification;
-}
-
-/**
- * A Cell monthly report. The two arms are the API's own, and the difference is
- * section 12's structural rule rather than a rendering choice.
- */
-export type CellMonthlyReport =
-  | (MonthlyCommon & {
-      scope: { kind: 'CELL'; cell_id: string };
-      n: number;
-      buckets: AttendanceBucket[];
-      coverage: CellCoverage;
-    })
-  | (MonthlyCommon & {
-      scope: { kind: 'LEADER'; person_id: string } | { kind: 'WHOLE_CHURCH' };
-      coverage: CellCoverage;
-    });
-
-export interface DccMonthlyReport extends MonthlyCommon {
-  scope: unknown;
-  n: number;
-  /** Sundays the calendar holds that carried no service (section 9). */
-  removed_events: string[];
-  buckets: AttendanceBucket[];
-  coverage: DccCoverage;
-}
-
-/**
- * The scopes a report may be asked for (SKILL.md sections 7, 17 and 20).
- *
- * **`NETWORK` is offered by the DCC report and not by the Cell one**, which is the
- * API's own asymmetry rather than a choice made here: what a `NETWORK`-scoped *Cell*
- * figure narrows is unstated in section 20 and recorded as open in `CLAUDE.md`, so
- * that route refuses the scope. `getCellMonthlyReport` therefore takes a narrower
- * type than this union, and the compiler is what keeps a caller from asking.
- */
-export type ReportScope =
-  | { kind: 'WHOLE_CHURCH' }
-  | { kind: 'NETWORK'; network: ReportNetwork }
-  | { kind: 'LEADER'; person_id: string }
-  | { kind: 'CELL'; cell_id: string };
-
 /** Section 4: the two Networks, which are the only values the API accepts. */
 export type ReportNetwork = 'MENS' | 'WOMENS';
-
-function query(period: string, scope: ReportScope): string {
-  const params = new URLSearchParams({ period, scope: scope.kind });
-  if (scope.kind === 'LEADER') {
-    params.set('leader_id', scope.person_id);
-  }
-  if (scope.kind === 'CELL') {
-    params.set('cell_id', scope.cell_id);
-  }
-  // Required where the scope is `NETWORK` and refused under any other, which is the
-  // API's rule rather than a convenience: a request naming both a Network and a
-  // leader is asking for two different things.
-  if (scope.kind === 'NETWORK') {
-    params.set('network', scope.network);
-  }
-
-  return params.toString();
-}
-
-export async function getCellMonthlyReport(
-  period: string,
-  scope: Exclude<ReportScope, { kind: 'NETWORK' }>,
-  signal?: AbortSignal,
-): Promise<CellMonthlyReport> {
-  return authenticatedRequest<CellMonthlyReport>(
-    `/api/v1/reports/cells/monthly?${query(period, scope)}`,
-    { signal },
-  );
-}
-
-export async function getDccMonthlyReport(
-  period: string,
-  scope: Exclude<ReportScope, { kind: 'CELL' }>,
-  signal?: AbortSignal,
-): Promise<DccMonthlyReport> {
-  return authenticatedRequest<DccMonthlyReport>(
-    `/api/v1/reports/dcc/monthly?${query(period, scope)}`,
-    { signal },
-  );
-}
 
 /** One row of My 12: people, once each, and the stage each had reached (decision 0293). */
 export interface TwelveFigure {

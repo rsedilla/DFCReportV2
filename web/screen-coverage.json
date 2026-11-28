@@ -512,11 +512,13 @@
     },
     {
       "route": "GET /api/v1/reports/dcc/monthly",
-      "screen": "web/app/(app)/dashboard/page.tsx"
+      "no_screen_owed": true,
+      "reason": "Its last screen was the calendar Year's month table (decision 0257), which decision 0443 took off the screens, saying the API still answers it. The dashboard named here before never called it. The route stays."
     },
     {
       "route": "GET /api/v1/reports/cells/monthly",
-      "screen": "web/app/(app)/dashboard/page.tsx"
+      "no_screen_owed": true,
+      "reason": "Its last screen was the calendar Year's month table (decision 0257), which decision 0443 took off the screens, saying the API still answers it. The dashboard named here before never called it. The route stays."
     },
     {
       "route": "GET /api/v1/reports/cells/twelve",
