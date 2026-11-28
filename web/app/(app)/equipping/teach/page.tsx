@@ -21,6 +21,8 @@ const LEVELS: readonly { key: Level; label: string }[] = [
 
 /** Lessons 1 to 9, the Encounter taking lesson 5's place (decision 0503). */
 const COLUMNS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
+/** SOL's ten weekly lessons, no Encounter (decision 0514). */
+const SOL_COLUMNS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] as const;
 
 /**
  * **A leader's Equipping** (decision 0501, point 21; decision 0504): one level at a time, *Life
@@ -139,6 +141,9 @@ function PeopleGroup({ level, people, nothingElse }: { level: string; people: My
 
 function PersonCard({ person }: { person: MyPerson }) {
   const markFor = (n: number) => person.marks.find((m) => m.lesson === n) ?? null;
+  // SOL's ten lessons, no Encounter (decision 0514, point 14).
+  const sol = person.sol ?? null;
+  const columns: readonly number[] = sol === null ? COLUMNS : SOL_COLUMNS;
   // Counted as the class's own register counts them (decision 0503): a lesson held before they
   // joined and not yet made up is not counted against them.
   const kept = person.marks.filter((m) => m.came || m.made_up_on !== null).length;
@@ -147,6 +152,12 @@ function PersonCard({ person }: { person: MyPerson }) {
   return (
     <li className="border-line bg-surface rounded-xl border px-4 py-3">
       <p className="font-semibold">{person.person.full_name}</p>
+      {sol !== null ? (
+        // What is still missing leads, as approved (decision 0514, point 14).
+        <p className="text-sm font-semibold">
+          {sol.still_missing.length > 0 ? `Still missing: ${sol.still_missing.join(', ')}` : 'Nothing missing so far'}
+        </p>
+      ) : null}
       <p className="text-muted text-sm">
         {person.class.name} · Teacher {person.teacher?.full_name ?? 'not named yet'}
       </p>
@@ -156,20 +167,21 @@ function PersonCard({ person }: { person: MyPerson }) {
           <caption className="sr-only">{person.person.full_name}’s lessons</caption>
           <thead>
             <tr>
-              {COLUMNS.map((n) => (
+              {columns.map((n) => (
                 <th key={n} scope="col" className="text-muted px-1 py-1 font-normal">
-                  {n === 5 ? 'ENC' : `L${n}`}
+                  {n === 5 && sol === null ? 'ENC' : `L${n}`}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             <tr>
-              {COLUMNS.map((n) => {
-                const mark = n === 5 ? null : markFor(n);
+              {columns.map((n) => {
+                const encounter = n === 5 && sol === null;
+                const mark = encounter ? null : markFor(n);
                 // ENC is the Registrar's record of the weekend (decision 0507).
                 const sign =
-                  n === 5
+                  encounter
                     ? person.encounter === 'CAME'
                       ? '✓'
                       : person.encounter === 'MISSED'
@@ -205,9 +217,17 @@ function PersonCard({ person }: { person: MyPerson }) {
           </tbody>
         </table>
       </div>
-      <p className={cn('mt-2 text-sm', owed.length > 0 && 'font-semibold')}>
-        {kept} of {counted} came{owed.length > 0 ? ` · ${owed.join(', ')} not made up yet` : ''}
-      </p>
+      {sol !== null ? (
+        <p className="text-muted mt-2 text-sm">
+          Verses {sol.verses} of 10 · Devotionals {sol.devotionals} of 10 · Quiz{' '}
+          {sol.quiz === 'PASSED' ? 'passed' : sol.quiz === 'NOT_PASSED' ? 'not yet passed' : 'not yet'} · Book{' '}
+          {sol.book ? 'read' : 'not yet'}
+        </p>
+      ) : (
+        <p className={cn('mt-2 text-sm', owed.length > 0 && 'font-semibold')}>
+          {kept} of {counted} came{owed.length > 0 ? ` · ${owed.join(', ')} not made up yet` : ''}
+        </p>
+      )}
     </li>
   );
 }

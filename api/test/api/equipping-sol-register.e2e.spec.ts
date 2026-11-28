@@ -663,6 +663,59 @@ describe('SOL 1’s register (section 29, decision 0514)', () => {
     ).toBe('lesson');
   });
 
+  it('shows a leader what is still missing, and the quiz as passed, never its score (point 14)', async () => {
+    // Lesson 1's week has closed, so its missing verse is listed; lesson 8's is open, so its own tab
+    // is still where the verse is ticked and the card says nothing of it (owner, 2026-11-27).
+    await post(admin, `equipping/classes/${classId}/lessons/1`, {
+      held_on: firstLesson,
+      came: [id('Ben')],
+      verse: [],
+      devotional: [id('Ben')],
+      correction_reason: 'The Teacher’s paper register, entered late.',
+    }).expect(200);
+    await post(teacher, `equipping/classes/${classId}/lessons/8`, {
+      held_on: lesson8(),
+      came: [id('Ben'), id('Carlo')],
+      verse: [id('Carlo')],
+      devotional: [id('Ben'), id('Carlo')],
+    }).expect(200);
+    // A make-up recorded without its devotional is owed at once, the week still open, as on the
+    // Teacher's card.
+    await post(teacher, `equipping/classes/${classId}/make-ups`, {
+      enrollment_id: id('Dino'),
+      lesson: 8,
+      made_up_on: today,
+      verse: true,
+      devotional: false,
+    }).expect(201);
+    await post(teacher, `equipping/classes/${classId}/quiz`, { items: 20 }).expect(200);
+    await post(teacher, `equipping/classes/${classId}/quiz-tries`, {
+      enrollment_id: id('Ben'),
+      try: 1,
+      score: 17,
+    }).expect(201);
+    const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
+    const cards = (
+      (await get(ramonAccount, 'equipping/my-people').expect(200)).body as {
+        data: { enrollment_id: string; sol: Record<string, unknown> }[];
+      }
+    ).data;
+    const card = (name: string) => cards.find((c) => c.enrollment_id === id(name))!.sol;
+    expect(card('Ben')).toEqual({
+      verses: 0,
+      devotionals: 2,
+      quiz: 'PASSED',
+      book: false,
+      still_missing: ['L1 verse'],
+    });
+    expect(card('Dino')).toMatchObject({
+      quiz: 'NOT_TAKEN',
+      still_missing: ['L1 make-up', 'L8 devotional'],
+    });
+    // No score, under any name: neither the word nor the value 17.
+    expect(JSON.stringify(cards)).not.toMatch(/score|:17[,}]/);
+  });
+
   describe('final grades (decision 0514, points 11 to 13)', () => {
     /** Saves one lesson as the Teacher, or as the Admin with a reason once its week has closed. */
     const save = async (lesson: number, heldOn: string, body: object) => {
