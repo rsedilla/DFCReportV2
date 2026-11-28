@@ -93,8 +93,6 @@ export default function ClassesPage() {
     enabled: levels.isSuccess,
   });
   const others = classes.data?.other_coordinators ?? [];
-  // SOL 1's grades come with a later step (decision 0514); its register is built.
-  const life = level === 'LIFE_CLASS';
   const lead =
     others.length > 0
       ? `${LEVEL_LABELS[level]}, which you coordinate with ${others.join(' and ')}.`
@@ -190,7 +188,7 @@ export default function ClassesPage() {
                       <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
                         Students
                       </Button>
-                      {life ? <GradesLink each={each} /> : null}
+                      <GradesLink each={each} />
                     </div>
                   </>
                 )}
@@ -241,7 +239,7 @@ export default function ClassesPage() {
                         <Button type="button" variant="secondary" onClick={() => setViewing(each)}>
                           Students
                         </Button>
-                        {life ? <GradesLink each={each} /> : null}
+                        <GradesLink each={each} />
                       </div>
                     </td>
                   </tr>

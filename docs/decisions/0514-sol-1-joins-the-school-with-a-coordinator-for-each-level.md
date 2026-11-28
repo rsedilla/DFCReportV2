@@ -137,10 +137,21 @@ lesson-by-lesson register stays on the Teacher's page, and there is no *Not yet*
 passed", declining a grade like UP's *INC*). *Why* names it and the level is taken again as a 2nd
 try (decision 0511); a tick wrongly missed is the Admin's change after posting.
 
+**Every check not met is named in *Why*, the absences first** (owner, 2026-11-26, "B, name everything",
+from screenshots compared with Google Classroom's missing work, Canvas's module progress,
+Moodle's completion report, PeopleSoft's grade roster and degree audits): a student over the
+absence limit reads, for example, *4 absences, over the 3 allowed. L3 and L8 not made up. L9
+verse and the book missing.*, so each value Final Grades shows in red has its reason in *Why*.
+Life Class keeps its single reason.
+
 **13. Once SOL 1's first class opens, only the Admin ticks SOL 1 before the school** (owner,
 2026-11-24, "Admin only"), as decision 0509 gave the Encounter and Life Class, with a reason; a
 posted Passed files SOL 1 *From the school*. The note above the Training table names the levels the
-reader still ticks.
+reader still ticks. **A class opens when a Coordinator opens it** (owner, 2026-11-26, "When a class
+opens", asked between that and its first lesson): the moment a SOL 1 class exists, before any
+lesson, leaders stop ticking SOL 1, as a university's registrar alone records credit for a course
+it teaches. A class cancelled before it began (decision 0510) never opened. And as 0509 says of
+the Encounter and Life Class, **nobody changes a SOL 1 the school filed**, the Admin included.
 
 ## The leader's tab
 
@@ -169,11 +180,19 @@ on the Coordinator's *Classes*. The card lists what is owed from a lesson whose 
 from a make-up recorded without it; while a lesson's week is open its own tab is where the two are
 ticked.
 
-Points 11 to 14 are ruled and not built; until each is, what Section 29 says of it describes no
-route. **Until then a SOL 1 class reaches none of Life Class's grades or posting**, which would
-grade it as nine lessons with an Encounter and file a Life Class graduation: reading or checking
-its grades and posting it are refused `INVARIANT_VIOLATION`; it is left out of a leader's people in
-the school and the Registrar's *Final Grades*; and the Coordinator's *Classes* shows no *Grades*
-for it. Each refusal goes with the step that builds what it stands in for.
+Points 11 to 13, the third step: migration `0062_equipping_sol_final_grades.sql` (a posted grade
+counting up to ten lessons, Life Class held to nine and a SOL grade never *Not yet* nor joining at
+Lesson 6, by a trigger); a SOL grade worked out from its checklist, *Why* naming each check not
+met; checking and posting a SOL class as Life Class's are; a posted *Passed* filing SOL 1 *From the
+school*; SOL 1 the school's in Training once a SOL 1 class opens; and *Final Grades* with a *Level*
+picker and the five checks, with *Grades* on a SOL class on the Coordinator's *Classes*.
+
+**Not built yet: the Admin's change of a SOL grade after posting** (point 12). How the Admin
+corrects a verse, devotional, quiz or book once a class is posted has no screen of its own yet,
+and comes with one shown to the owner first; until then a change of a SOL grade is refused
+`INVARIANT_VIOLATION`, saying so, and Life Class's changes are unchanged.
+
+Point 14 is ruled and not built; until it is, what Section 29 says of it describes no route, and a
+SOL 1 class is left out of a leader's people in the school.
 
 Previous: [2026-11-23 — The Admin changes a lesson after posting, and the grade is worked out again](0513-the-admin-changes-a-lesson-after-posting-and-the-grade-is-worked-out-again.md)

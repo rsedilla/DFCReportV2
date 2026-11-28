@@ -143,6 +143,47 @@ function HistoryToggle({ open, onToggle, id }: { open: boolean; onToggle: () => 
   );
 }
 
+/** SOL's five checks, in the order the owner approved (decision 0514, point 11). */
+const SOL_COLUMNS = ['Attendance', 'Verses', 'Devotionals', 'Quiz', 'Book'] as const;
+
+/**
+ * One SOL student's five checks as Final Grades shows them (decision 0514, point 11, as approved):
+ * *10 of 10 · 1 made up* or *4 absences*, *N of 10* twice, *75% ✓* or *65% · 3 tries*, and ✓ or ✗.
+ * A failing value is in red and named in *Why* as well, so colour carries nothing alone.
+ */
+function solCellsOf(s: ClassGrades['students'][number]) {
+  const c = s.checklist!;
+  const items = c.quiz.items;
+  const best = items === null || c.quiz.scores.length === 0 ? null : Math.max(...c.quiz.scores);
+  const percent = best === null || items === null ? null : Math.round((best * 100) / items);
+  const tries = c.quiz.scores.length;
+  return [
+    {
+      column: 'Attendance',
+      failing: c.absences > 3 || s.lessons_kept < 10,
+      text:
+        c.absences > 3
+          ? `${c.absences} absences`
+          : `${s.lessons_kept} of 10${c.made_up > 0 ? ` · ${c.made_up} made up` : ''}`,
+      words: null,
+    },
+    { column: 'Verses', failing: c.verses < 10, text: `${c.verses} of 10`, words: null },
+    { column: 'Devotionals', failing: c.devotionals < 10, text: `${c.devotionals} of 10`, words: null },
+    {
+      column: 'Quiz',
+      failing: !c.quiz.passed,
+      text:
+        percent === null
+          ? '–'
+          : c.quiz.passed
+            ? `${percent}% ✓`
+            : `${percent}% · ${tries} ${tries === 1 ? 'try' : 'tries'}`,
+      words: percent === null ? 'not taken' : c.quiz.passed ? ', passed' : ', not passed',
+    },
+    { column: 'Book', failing: !c.book, text: c.book ? '✓' : '✗', words: c.book ? ' read' : ' not read' },
+  ];
+}
+
 /**
  * **A class's final grades** (decision 0508, the owner's version B): where the class stands in
  * three steps, filters by grade, and each student with their grade and its reason beside the
@@ -179,12 +220,15 @@ export function GradesPanel({
   // Straight from A to Z by last name, as the API sends them (decision 0515); the pills pick out
   // who needs a look.
   const rows = data.students.filter((s) => filter === 'ALL' || s.grade === filter);
+  // SOL grades by its five checks and has no Encounter, so no *Not yet* (decision 0514, point 11).
+  const sol = data.class.level !== undefined && data.class.level !== 'LIFE_CLASS';
   const chips: { key: FinalGrade | 'ALL'; label: string }[] = [
     { key: 'ALL', label: `All · ${data.students.length}` },
     { key: 'NOT_PASSED', label: `Not passed · ${status.counts.not_passed}` },
-    { key: 'NOT_YET', label: `Not yet · ${status.counts.not_yet}` },
+    ...(sol ? [] : [{ key: 'NOT_YET' as const, label: `Not yet · ${status.counts.not_yet}` }]),
     { key: 'PASSED', label: `Passed · ${status.counts.passed}` },
   ];
+  const columns = sol ? SOL_COLUMNS.length : COLUMNS.length + 1;
   const checked = status.admin_check ?? status.coordinator_check;
   const steps = [
     {
@@ -274,14 +318,24 @@ export function GradesPanel({
                   <th scope="col" className="px-3 py-2 text-left">
                     Why
                   </th>
-                  {COLUMNS.map((c) => (
-                    <th key={c} scope="col" className="text-muted px-1.5 py-2 text-center font-normal">
-                      {c}
-                    </th>
-                  ))}
-                  <th scope="col" className="px-3 py-2 text-left">
-                    Lessons
-                  </th>
+                  {sol ? (
+                    SOL_COLUMNS.map((c) => (
+                      <th key={c} scope="col" className="px-3 py-2 text-left">
+                        {c}
+                      </th>
+                    ))
+                  ) : (
+                    <>
+                      {COLUMNS.map((c) => (
+                        <th key={c} scope="col" className="text-muted px-1.5 py-2 text-center font-normal">
+                          {c}
+                        </th>
+                      ))}
+                      <th scope="col" className="px-3 py-2 text-left">
+                        Lessons
+                      </th>
+                    </>
+                  )}
                   {changes ? (
                     <th scope="col" className="px-3 py-2">
                       <span className="sr-only">Change</span>
@@ -318,18 +372,35 @@ export function GradesPanel({
                             />
                           ) : null}
                         </td>
-                        {s.lessons.map((sign, i) => (
-                          <td
-                            key={i}
-                            className={cn(
-                              'px-1.5 py-2 text-center',
-                              sign === 'ABSENT' && 'text-field-invalid font-semibold',
-                            )}
-                          >
-                            <Mark sign={sign} />
-                          </td>
-                        ))}
-                        <td className="text-muted px-3 py-2 whitespace-nowrap">{lessonsLine(s)}</td>
+                        {sol && s.checklist ? (
+                          solCellsOf(s).map((cell) => (
+                            <td
+                              key={cell.column}
+                              className={cn(
+                                'px-3 py-2 whitespace-nowrap',
+                                cell.failing ? 'text-field-invalid font-semibold' : 'text-muted',
+                              )}
+                            >
+                              {cell.text}
+                              {cell.words ? <span className="sr-only">{cell.words}</span> : null}
+                            </td>
+                          ))
+                        ) : (
+                          <>
+                            {s.lessons.map((sign, i) => (
+                              <td
+                                key={i}
+                                className={cn(
+                                  'px-1.5 py-2 text-center',
+                                  sign === 'ABSENT' && 'text-field-invalid font-semibold',
+                                )}
+                              >
+                                <Mark sign={sign} />
+                              </td>
+                            ))}
+                            <td className="text-muted px-3 py-2 whitespace-nowrap">{lessonsLine(s)}</td>
+                          </>
+                        )}
                         {changes ? (
                           <td className="px-3 py-2">
                             <Button
@@ -346,7 +417,7 @@ export function GradesPanel({
                       </tr>
                       {changed && opened.has(s.enrollment_id) ? (
                         <tr id={historyId} className="bg-raised">
-                          <td colSpan={COLUMNS.length + 4 + (changes ? 1 : 0)} className="px-4 py-3">
+                          <td colSpan={columns + 3 + (changes ? 1 : 0)} className="px-4 py-3">
                             <History s={s} postedAt={postedAt} />
                           </td>
                         </tr>
@@ -369,14 +440,27 @@ export function GradesPanel({
                   <p className="text-muted text-xs">Your disciple: the Admin checks</p>
                 ) : null}
                 <p className="text-sm">{s.reason}</p>
-                <p className="text-muted mt-1 flex flex-wrap gap-x-2 text-xs">
-                  {s.lessons.map((sign, i) => (
-                    <span key={i} className={cn(sign === 'ABSENT' && 'text-field-invalid font-semibold')}>
-                      {COLUMNS[i]} <Mark sign={sign} />
-                    </span>
-                  ))}
-                </p>
-                <p className="text-muted text-xs">Lessons {lessonsLine(s)}</p>
+                {sol && s.checklist ? (
+                  <p className="text-muted mt-1 flex flex-wrap gap-x-3 text-xs">
+                    {solCellsOf(s).map((cell) => (
+                      <span key={cell.column} className={cn(cell.failing && 'text-field-invalid font-semibold')}>
+                        {cell.column} {cell.text}
+                        {cell.words ? <span className="sr-only">{cell.words}</span> : null}
+                      </span>
+                    ))}
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-muted mt-1 flex flex-wrap gap-x-2 text-xs">
+                      {s.lessons.map((sign, i) => (
+                        <span key={i} className={cn(sign === 'ABSENT' && 'text-field-invalid font-semibold')}>
+                          {COLUMNS[i]} <Mark sign={sign} />
+                        </span>
+                      ))}
+                    </p>
+                    <p className="text-muted text-xs">Lessons {lessonsLine(s)}</p>
+                  </>
+                )}
                 {(s.history ?? []).length > 0 ? (
                   <>
                     <HistoryToggle
@@ -399,7 +483,11 @@ export function GradesPanel({
               </li>
             ))}
           </ul>
-          <p className="text-muted mt-3 text-sm">✓ came · ✗ absent · M made up · – not marked</p>
+          <p className="text-muted mt-3 text-sm">
+            {sol
+              ? 'The lesson by lesson register is on the Teacher’s page.'
+              : '✓ came · ✗ absent · M made up · – not marked'}
+          </p>
         </>
       )}
       <div className="mt-4">{action}</div>

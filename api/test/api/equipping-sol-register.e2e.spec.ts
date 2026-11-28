@@ -662,4 +662,178 @@ describe('SOL 1’s register (section 29, decision 0514)', () => {
       ).details?.field,
     ).toBe('lesson');
   });
+
+  describe('final grades (decision 0514, points 11 to 13)', () => {
+    /** Saves one lesson as the Teacher, or as the Admin with a reason once its week has closed. */
+    const save = async (lesson: number, heldOn: string, body: object) => {
+      const asTeacher = await post(teacher, `equipping/classes/${classId}/lessons/${lesson}`, {
+        held_on: heldOn,
+        ...body,
+      });
+      if (asTeacher.status === 200) return;
+      await post(admin, `equipping/classes/${classId}/lessons/${lesson}`, {
+        held_on: heldOn,
+        ...body,
+        correction_reason: 'The Teacher’s paper register, entered late.',
+      }).expect(200);
+    };
+
+    interface GradeRow {
+      enrollment_id: string;
+      grade: string;
+      reason: string;
+      checklist: {
+        absences: number;
+        made_up: number;
+        verses: number;
+        devotionals: number;
+        quiz: { items: number | null; scores: number[]; passed: boolean };
+        book: boolean;
+      };
+    }
+
+    it('grades by the checklist, names what is owed, posts, and files SOL 1 from the school', async () => {
+      const everyone = [id('Ben'), id('Carlo'), id('Dino')];
+      for (let n = 1; n <= 10; n += 1) {
+        // Lessons 9 and 10 both met today, the Teacher moving the date (decision 0503).
+        const heldOn = n <= 9 ? plusDays(firstLesson, (n - 1) * 7) : today;
+        // Dino misses lessons 1 to 4; Carlo never hands in L7's devotional.
+        const came = n <= 4 ? [id('Ben'), id('Carlo')] : everyone;
+        await save(n, heldOn, {
+          came,
+          verse: came,
+          devotional: n === 7 ? came.filter((c) => c !== id('Carlo')) : came,
+        });
+      }
+      await post(teacher, `equipping/classes/${classId}/quiz`, { items: 20 }).expect(200);
+      const tries = `equipping/classes/${classId}/quiz-tries`;
+      await post(teacher, tries, { enrollment_id: id('Ben'), try: 1, score: 15 }).expect(201);
+      for (const [n, score] of [
+        [1, 12],
+        [2, 11],
+        [3, 13],
+      ]) {
+        await post(teacher, tries, { enrollment_id: id('Carlo'), try: n, score }).expect(201);
+      }
+      await post(teacher, `equipping/classes/${classId}/books`, {
+        enrollment_id: id('Ben'),
+        read: true,
+      }).expect(200);
+
+      const grades = async () =>
+        (await get(registrar, `equipping/final-grades/classes/${classId}`).expect(200)).body as {
+          status: { phase: string };
+          fingerprint: string;
+          may_change: boolean;
+          students: GradeRow[];
+        };
+      let g = await grades();
+      const row = (name: string) => g.students.find((s) => s.enrollment_id === id(name))!;
+      expect(row('Ben')).toMatchObject({
+        grade: 'PASSED',
+        reason: 'Everything done.',
+        checklist: {
+          absences: 0,
+          made_up: 0,
+          verses: 10,
+          devotionals: 10,
+          quiz: { items: 20, scores: [15], passed: true },
+          book: true,
+        },
+      });
+      // Every failing check is named, in the words approved (decision 0514, point 11).
+      expect(row('Carlo')).toMatchObject({
+        grade: 'NOT_PASSED',
+        reason:
+          'L7 devotional and the book missing. Quiz not passed after two retakes: 60%, 55%, 65%.',
+        checklist: { verses: 10, devotionals: 9, book: false },
+      });
+      expect(row('Dino')).toMatchObject({
+        grade: 'NOT_PASSED',
+        // Every check not met is named, the absences first (owner, 2026-11-26, "B, name
+        // everything").
+        reason:
+          '4 absences, over the 3 allowed. L1, L2, L3 and L4 not made up. The book missing. Quiz not taken.',
+        checklist: { absences: 4 },
+      });
+      // No Not yet on SOL, which has no Encounter.
+      expect(g.students.map((s) => s.grade)).not.toContain('NOT_YET');
+
+      await post(admin, `equipping/coordinate/classes/${classId}/check`, {
+        fingerprint: g.fingerprint,
+      }).expect(200);
+      g = await grades();
+      expect(g.status.phase).toBe('READY');
+      await post(registrar, `equipping/final-grades/classes/${classId}/post`, {}).expect(200);
+
+      // A posted Passed files SOL 1 from the school (decision 0514, point 13).
+      const sol1 = await db
+        .selectFrom('training_graduations as t')
+        .innerJoin('equipping_registrations as r', 'r.person_id', 't.person_id')
+        .innerJoin('equipping_enrollments as e', 'e.registration_id', 'r.id')
+        .select(['e.id as enrollment_id', 't.from_school'])
+        .where('t.program', '=', 'SOL_1')
+        .where('t.superseded_at', 'is', null)
+        .execute();
+      expect(sol1).toEqual([{ enrollment_id: id('Ben'), from_school: true }]);
+
+      // Nobody changes the school's, the Admin included (decision 0509).
+      const benPerson = (
+        await db
+          .selectFrom('equipping_enrollments as e')
+          .innerJoin('equipping_registrations as r', 'r.id', 'e.registration_id')
+          .select('r.person_id')
+          .where('e.id', '=', id('Ben'))
+          .executeTakeFirstOrThrow()
+      ).person_id;
+      const seen = (
+        await db
+          .selectFrom('training_graduations')
+          .select('id')
+          .where('person_id', '=', benPerson)
+          .where('program', '=', 'SOL_1')
+          .executeTakeFirstOrThrow()
+      ).id;
+      const refused = await post(admin, 'training/submit', {
+        changes: [
+          {
+            person_id: benPerson,
+            program: 'SOL_1',
+            graduated: false,
+            seen_id: seen,
+            reason: 'Ticked in error.',
+          },
+        ],
+      }).expect(409);
+      expect(errorOf(refused).code).toBe('INVARIANT_VIOLATION');
+
+      // The Final Grades list carries the class, posted.
+      const list = await get(
+        registrar,
+        `equipping/final-grades?level=SOL_1&term_year=${SOL.term_year}&term_number=${SOL.term_number}`,
+      ).expect(200);
+      expect((list.body as { data: { id: string; status: { phase: string } }[] }).data).toEqual([
+        expect.objectContaining({
+          id: classId,
+          status: expect.objectContaining({ phase: 'POSTED' }),
+        }),
+      ]);
+
+      // Changing a SOL grade after posting is not built yet, and says so.
+      g = await grades();
+      expect(g.may_change).toBe(false);
+      const gradeId = (
+        await db
+          .selectFrom('equipping_final_grades')
+          .select('id')
+          .where('enrollment_id', '=', id('Carlo'))
+          .executeTakeFirstOrThrow()
+      ).id;
+      const change = await get(
+        admin,
+        `equipping/final-grades/grades/${gradeId}/change-preview?lesson=7&to=CAME`,
+      ).expect(409);
+      expect(errorOf(change).code).toBe('INVARIANT_VIOLATION');
+    });
+  });
 });

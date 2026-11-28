@@ -35,6 +35,7 @@ import { EncounterSeasonsService } from '../training/encounter-seasons.service';
 import { TrainingService } from '../training/training.service';
 import { EQUIPPING_LEVELS } from './dto/equipping.dto';
 import { expectedOn } from './equipping-attendance.service';
+import { lockSol1OpeningWithin } from './sol-1-opening';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, EquippingLevel, EquippingRequirement } from '../database/schema';
@@ -1246,6 +1247,11 @@ export class EquippingService {
     }
 
     return this.write(async (trx) => {
+      // Opening a SOL 1 class makes SOL 1 the school's in Training (decision 0514, point 13),
+      // after any leader's SOL 1 save already under way.
+      if (body.level === 'SOL_1') {
+        await lockSol1OpeningWithin(trx);
+      }
       if (teacher !== null) {
         await this.assertMayTeachWithin(trx, teacher.id);
       }

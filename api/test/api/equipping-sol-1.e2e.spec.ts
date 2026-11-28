@@ -604,8 +604,41 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
     });
   });
 
-  describe('SOL 1’s grades, not built yet (decision 0514)', () => {
-    it('refuses posting a SOL 1 class, and files no SOL 1 graduation', async () => {
+  describe('SOL 1’s grades (decision 0514, points 11 to 13)', () => {
+    describe('Training once a SOL 1 class opens (owner, 2026-11-26, "When a class opens")', () => {
+      const tick = (as: TestAccount, personId: string) =>
+        post(as, 'training/submit', {
+          changes: [{ person_id: personId, program: 'SOL_1', graduated: true }],
+        });
+      const schoolPrograms = async (as: TestAccount) =>
+        ((await get(as, 'training/people').expect(200)).body as { school_programs: string[] })
+          .school_programs;
+
+      it('lets a leader tick SOL 1 until a SOL 1 class opens, then only the Admin', async () => {
+        const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
+        expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS']);
+        await tick(ramonAccount, disciples[0].id).expect(201);
+
+        await openSol(solCoordinator).expect(201);
+        expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS', 'SOL_1']);
+        const refused = await tick(ramonAccount, disciples[1].id).expect(403);
+        expect(errorCode(refused)).toBe('SCOPE_DENIED');
+        // The Admin ticks it for somebody who finished before the school.
+        await tick(admin, disciples[1].id).expect(201);
+      });
+
+      it('counts a cancelled SOL 1 class as never opened', async () => {
+        const ramonAccount = await createAccount(app, db, { person: ramon, roles: ['LEADER'] });
+        const classId = ((await openSol(solCoordinator).expect(201)).body as { id: string }).id;
+        await post(solCoordinator, `equipping/classes/${classId}/cancel`, {
+          reason: 'The Teacher moved to another Network',
+        }).expect(200);
+        expect(await schoolPrograms(ramonAccount)).toEqual(['ENCOUNTER', 'LIFE_CLASS']);
+        await tick(ramonAccount, disciples[0].id).expect(201);
+      });
+    });
+
+    it('refuses posting a SOL 1 class whose lessons are not recorded, and files nothing', async () => {
       const { classId } = await solClassWithStudent();
       expect(
         errorCode(
@@ -647,7 +680,7 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       expect(counts.body).toEqual({ LIFE_CLASS: 0, SOL_1: 1 });
     });
 
-    it('opens a SOL 1 class’s register, and keeps it out of the grades', async () => {
+    it('opens a SOL 1 class’s register, and lists it on Final Grades, not ready', async () => {
       const { classId } = await solClassWithStudent();
       const register = await get(solCoordinator, `equipping/classes/${classId}/attendance`).expect(
         200,
@@ -655,9 +688,14 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
       expect(
         (register.body as { lessons: { lesson: number }[] }).lessons.map((l) => l.lesson),
       ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      const grades = await get(registrar, `equipping/final-grades/classes/${classId}`).expect(200);
       expect(
-        errorCode(await get(registrar, `equipping/final-grades/classes/${classId}`).expect(409)),
-      ).toBe('INVARIANT_VIOLATION');
+        (grades.body as { status: { phase: string; missing_lessons: number[] } }).status,
+      ).toMatchObject({
+        phase: 'NOT_READY',
+        missing_lessons: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      });
+      // Not every lesson is recorded, so it cannot be checked.
       expect(
         errorCode(
           await post(solCoordinator, `equipping/coordinate/classes/${classId}/check`, {
@@ -669,7 +707,9 @@ describe('SOL 1 in the school (section 29, decision 0514)', () => {
         registrar,
         'equipping/final-grades?level=SOL_1&term_year=2027&term_number=1',
       ).expect(200);
-      expect((list.body as { data: unknown[] }).data).toEqual([]);
+      expect((list.body as { data: { id: string }[] }).data).toEqual([
+        expect.objectContaining({ id: classId }),
+      ]);
       const lessons = await db.selectFrom('equipping_lessons').select('id').execute();
       expect(lessons).toEqual([]);
     });

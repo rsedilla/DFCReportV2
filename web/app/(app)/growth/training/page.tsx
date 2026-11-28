@@ -83,6 +83,11 @@ function TrainingTab() {
   // **Only the Admin ticks the Encounter and Life Class** (decision 0509): the school files them.
   // The shared list types the page by its rows alone; this tab's page also carries the flag.
   const schoolMayTick = (list.people.data as TrainingListPage | undefined)?.school_may_tick ?? false;
+  // SOL 1 is the school's too once a SOL 1 class has opened (decision 0514, point 13).
+  const schoolPrograms: ReadonlySet<TrainingProgram> = new Set(
+    (list.people.data as TrainingListPage | undefined)?.school_programs ?? SCHOOL_PROGRAMS,
+  );
+  const sol1FromSchool = schoolPrograms.has('SOL_1');
 
   const [draft, setDraft] = useState<Record<string, DraftEntry>>({});
   const [reason, setReason] = useState('');
@@ -170,6 +175,7 @@ function TrainingTab() {
         program={program}
         entry={draft[keyOf(row.person_id, program)]}
         schoolMayTick={schoolMayTick}
+        schoolPrograms={schoolPrograms}
         today={today}
         onToggle={(graduated) => update(row, program, { graduated })}
         onDate={(graduated_on) => update(row, program, { graduated: true, graduated_on })}
@@ -215,8 +221,12 @@ function TrainingTab() {
               key is, rather than explained in every cell (decision 0509). */}
           <p className="text-ink text-sm font-semibold">
             {schoolMayTick
-              ? 'You can tick the Encounter and Life Class only for someone who finished before the school.'
-              : 'You tick SOL 1 to 3. The Encounter and Life Class now come from the school.'}
+              ? sol1FromSchool
+                ? 'You can tick the Encounter, Life Class and SOL 1 only for someone who finished before the school.'
+                : 'You can tick the Encounter and Life Class only for someone who finished before the school.'
+              : sol1FromSchool
+                ? 'You tick SOL 2 and SOL 3. The Encounter, Life Class and SOL 1 now come from the school.'
+                : 'You tick SOL 1 to 3. The Encounter and Life Class now come from the school.'}
           </p>
           <dl className="text-muted mt-2 mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <dt className="text-ink font-semibold">Key</dt>
@@ -321,6 +331,7 @@ function SchoolCell({
   program,
   entry,
   schoolMayTick,
+  schoolPrograms,
   today,
   onToggle,
   onDate,
@@ -330,6 +341,7 @@ function SchoolCell({
   program: TrainingProgram;
   entry: DraftEntry | undefined;
   schoolMayTick: boolean;
+  schoolPrograms: ReadonlySet<TrainingProgram>;
   today: string;
   onToggle: (graduated: boolean) => void;
   onDate: (graduatedOn: string | null) => void;
@@ -339,8 +351,8 @@ function SchoolCell({
   const graduated = entry?.graduated ?? stored !== null;
   const name = `${PROGRAM_LABELS[program]}, ${row.full_name}`;
   const storedDate = stored ? (stored.graduated_on ? longDay(stored.graduated_on) : 'no date') : '';
-  // The Encounter and Life Class say where a graduation came from (decision 0509).
-  const school = SCHOOL_PROGRAMS.has(program);
+  // The levels the school files say where a graduation came from (decisions 0509 and 0514).
+  const school = schoolPrograms.has(program) || stored?.from_school === true;
   const source =
     school && stored ? (stored.from_school ? 'From the school' : 'Before the school') : null;
   const tag = source ? <SourceLabel>{source}</SourceLabel> : null;
@@ -402,7 +414,7 @@ function SourceLabel({ children }: { children: string }) {
   );
 }
 
-/** The two the school files; only the Admin ticks either (decision 0509). */
+/** The two the school always files; SOL 1 joins them once a class opens (decisions 0509, 0514). */
 const SCHOOL_PROGRAMS: ReadonlySet<TrainingProgram> = new Set(['ENCOUNTER', 'LIFE_CLASS']);
 
 function doneLabel(row: TrainingPerson, draft: Record<string, DraftEntry>): string {

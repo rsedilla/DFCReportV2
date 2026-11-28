@@ -80,7 +80,10 @@ const CAPABILITIES = {
   onBehalf: Capability.TrainingConfirmOnBehalf,
 };
 
-/** The two the school files (decision 0509): only the Admin ticks either. */
+/**
+ * The two the school always files (decision 0509): only the Admin ticks either. SOL 1 joins them
+ * once a SOL 1 class has opened (decision 0514, point 13), which `schoolProgramsOf` asks.
+ */
 const SCHOOL_PROGRAMS: ReadonlySet<TrainingProgram> = new Set(['ENCOUNTER', 'LIFE_CLASS']);
 
 const LABELS: Record<TrainingProgram, string> = {
@@ -115,6 +118,19 @@ export class TrainingService {
     @Inject(SCHOOL_EVIDENCE_PORT)
     private readonly schoolEvidence?: SchoolEvidencePort,
   ) {}
+
+  /**
+   * The levels the school files now: the Encounter and Life Class always, and SOL 1 once a
+   * Coordinator has opened a SOL 1 class (owner, 2026-11-26, "When a class opens"). Without the
+   * port SOL 1 counts as the school's too, so a missing binding never lets a leader tick it.
+   */
+  private async schoolProgramsOf(
+    executor: Db | Transaction<Database>,
+  ): Promise<ReadonlySet<TrainingProgram>> {
+    const sol1 =
+      this.schoolEvidence === undefined ? true : await this.schoolEvidence.runsSol1(executor);
+    return sol1 ? new Set([...SCHOOL_PROGRAMS, 'SOL_1']) : SCHOOL_PROGRAMS;
+  }
 
   /** What the shared Growth helpers read through, each the module owning its table. */
   private get deps() {
@@ -225,9 +241,11 @@ export class TrainingService {
           })),
         may_file: mayFile.has(row.id),
       })),
-      // **Only the Admin ticks the Encounter and Life Class** (owner, 2026-11-22, decision 0509):
-      // the school files them, and a tick is for somebody who finished before it.
+      // **Only the Admin ticks the Encounter and Life Class** (owner, 2026-11-22, decision 0509),
+      // **and SOL 1 once a SOL 1 class has opened** (decision 0514, point 13): the school files
+      // them, and a tick is for somebody who finished before it.
       school_may_tick: holdsWholeChurch(authority, CAPABILITIES.confirm),
+      school_programs: [...(await this.schoolProgramsOf(this.db))],
       next_cursor: nextCursor,
     };
   }
@@ -248,6 +266,11 @@ export class TrainingService {
 
     try {
       return await this.db.transaction().execute(async (trx) => {
+        // Before anything else, so no SOL 1 class opens between reading whether one is open and
+        // this save committing (decision 0514, point 13; `equipping/sol-1-opening.ts`).
+        if (changes.some((change) => change.program === 'SOL_1')) {
+          await this.schoolEvidence?.shareSol1OpeningWithin(trx);
+        }
         const now = await databaseNow(trx);
         const today = manilaDayOf(now);
 
@@ -281,13 +304,15 @@ export class TrainingService {
           lock: true,
         });
         const outcomes = changes.map((change) => outcomeOf(change, stored));
+        const schoolPrograms = await this.schoolProgramsOf(trx);
 
-        // **Only the Admin ticks the Encounter and Life Class** (decision 0509), refused before the
-        // stale check: a line nobody else may make is never answered "reload and decide again".
+        // **Only the Admin ticks the Encounter and Life Class** (decision 0509), and SOL 1 once a
+        // SOL 1 class has opened (decision 0514, point 13), refused before the stale check: a line
+        // nobody else may make is never answered "reload and decide again".
         if (!holdsWholeChurch(authority, CAPABILITIES.confirm)) {
           const school = changes.find(
             (change, index) =>
-              SCHOOL_PROGRAMS.has(change.program) && outcomes[index] !== 'UNCHANGED',
+              schoolPrograms.has(change.program) && outcomes[index] !== 'UNCHANGED',
           );
           if (school !== undefined) {
             throw new ScopeDeniedError(
@@ -301,10 +326,12 @@ export class TrainingService {
         if (staleAt !== -1) {
           throw await this.conflictFor(trx, actor, changes[staleAt], stored);
         }
-        // **Nobody changes the school's** (decision 0509), the Admin included. After the stale
-        // check, so the Admin's line made against an older page gets 0282's conflict.
+        // **Nobody changes the school's** (decision 0509), the Admin included, whichever level the
+        // school filed: the Encounter and Life Class, and SOL 1 from a posted SOL 1 class
+        // (decision 0514, point 13). After the stale check, so the Admin's line made against an
+        // older page gets 0282's conflict.
         for (const [index, change] of changes.entries()) {
-          if (!SCHOOL_PROGRAMS.has(change.program) || outcomes[index] === 'UNCHANGED') {
+          if (outcomes[index] === 'UNCHANGED') {
             continue;
           }
           // On any record of the person (decision 0408): a correction withdraws them all.
@@ -410,7 +437,7 @@ export class TrainingService {
           // **The school's takes the place of a tick the Admin withdraws** (decision 0509,
           // point 8): one whose school records show them passed is filed from the school, from
           // those records as they stand now.
-          if (outcome === 'RETRACT' && SCHOOL_PROGRAMS.has(change.program)) {
+          if (outcome === 'RETRACT' && schoolPrograms.has(change.program)) {
             await this.fileWhatTheSchoolHoldsWithin(trx, change.person_id, change.program, actor);
           }
         }
@@ -507,7 +534,7 @@ export class TrainingService {
   ): Promise<void> {
     if (this.schoolEvidence === undefined) {
       throw new InvariantViolationError(
-        'This deployment cannot withdraw a tick of the Encounter or Life Class: a port it needs is not bound.',
+        'This deployment cannot withdraw a tick the school files: a port it needs is not bound.',
         {},
       );
     }
@@ -521,7 +548,7 @@ export class TrainingService {
     const evidence = await this.schoolEvidence.evidenceWithin(
       trx,
       records,
-      program as 'ENCOUNTER' | 'LIFE_CLASS',
+      program as 'ENCOUNTER' | 'LIFE_CLASS' | 'SOL_1',
     );
     const seasonIds = uniqueIds(
       evidence.flatMap((each) => (each.kind === 'WEEKEND' ? [each.seasonId] : [])),

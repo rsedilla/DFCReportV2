@@ -898,6 +898,88 @@ export async function mockFinalGrades(
 }
 
 /**
+ * SOL 1's final grades (decision 0514, point 11, as approved): SOL 1 A ready to post, its five
+ * students graded by the checklist. Called after `mockFinalGrades`, whose list it answers for
+ * SOL 1. Every name is invented.
+ */
+export async function mockSolFinalGrades(page: Page): Promise<{ sent: { url: string; body: unknown }[] }> {
+  const sent: { url: string; body: unknown }[] = [];
+  const id = (n: number) => `3f1b7c6e-0000-4000-8000-${String(n).padStart(12, '0')}`;
+  const SOL_CLASS = id(9301);
+  const status = (p: string) => ({
+    phase: p,
+    missing_lessons: [],
+    counts: { passed: 2, not_passed: 3, not_yet: 0 },
+    coordinator_check: p === 'READY' || p === 'POSTED' ? { by: 'Lito Ramos', at: '2027-03-20T02:00:00.000Z' } : null,
+    admin_check: p === 'READY' || p === 'POSTED' ? { by: 'Ada Reyes', at: '2027-03-21T02:00:00.000Z' } : null,
+    disciples_for_admin: 0,
+    posted: p === 'POSTED' ? { at: '2027-03-22T02:00:00.000Z' } : null,
+  });
+  const checklist = (over: object = {}) => ({
+    absences: 0,
+    made_up: 0,
+    verses: 10,
+    devotionals: 10,
+    quiz: { items: 20, scores: [15], passed: true },
+    book: true,
+    ...over,
+  });
+  const student = (n: number, name: string, grade: string, reason: string, kept: number, list: object) => ({
+    enrollment_id: id(7300 + n),
+    person: { id: id(8300 + n), full_name: name, list_name: lastNameFirst(name) },
+    grade,
+    reason,
+    lessons_kept: kept,
+    lessons_made_up: (list as { made_up?: number }).made_up ?? 0,
+    lessons: Array(10).fill('CAME'),
+    checklist: checklist(list),
+    your_disciple: false,
+  });
+  const grades = {
+    class: { id: SOL_CLASS, name: 'SOL 1 A', level: 'SOL_1', day_of_week: 2, time_of_day: '19:00', place: 'Room 2' },
+    status: status('READY'),
+    may_check: true,
+    checks_as: 'COORDINATOR',
+    may_change: false,
+    fingerprint: 'b'.repeat(64),
+    students: [
+      student(1, 'Imelda Tolentino', 'NOT_PASSED', 'Quiz not passed after two retakes: 60%, 55%, 65%.', 10, {
+        quiz: { items: 20, scores: [12, 11, 13], passed: false },
+      }),
+      student(2, 'Nestor Villamor', 'NOT_PASSED', 'L7 devotional and the book missing.', 10, {
+        made_up: 1,
+        devotionals: 9,
+        book: false,
+      }),
+      // Every check not met is named, the absences first (owner, 2026-11-26).
+      student(3, 'Ramil Soriano', 'NOT_PASSED', '4 absences, over the 3 allowed. L2, L5, L6 and L8 not made up.', 6, {
+        absences: 4,
+        quiz: { items: 20, scores: [16], passed: true },
+      }),
+      student(4, 'Efren Quiambao', 'PASSED', 'Everything done.', 10, { made_up: 1 }),
+      student(5, 'Tomas Aquino', 'PASSED', 'Everything done.', 10, { quiz: { items: 20, scores: [18], passed: true } }),
+    ].sort(byLastName),
+  };
+  await page.route('**/api/v1/equipping/final-grades?*', (route) => {
+    if (!route.request().url().includes('level=SOL_1')) return route.fallback();
+    return route.fulfill(
+      json({
+        data: [
+          { id: SOL_CLASS, name: 'SOL 1 A', day_of_week: 2, time_of_day: '19:00', status: status('READY') },
+          { id: id(9302), name: 'SOL 1 B', day_of_week: 4, time_of_day: '19:00', status: status('WAITING_COORDINATOR') },
+        ],
+      }),
+    );
+  });
+  await page.route(`**/api/v1/equipping/final-grades/classes/${SOL_CLASS}`, (route) => route.fulfill(json(grades)));
+  await page.route(`**/api/v1/equipping/final-grades/classes/${SOL_CLASS}/post`, (route) => {
+    sent.push({ url: route.request().url(), body: route.request().postDataJSON() });
+    return route.fulfill(json({ ok: true }));
+  });
+  return { sent };
+}
+
+/**
  * A grade changed after posting (decision 0513): Life Class A posted, read as the Admin reads it,
  * Imelda's lessons changeable and Efren's grade changed once already. Called after
  * `mockFinalGrades(page, 'POSTED')`, whose class read it replaces. Every name is invented.

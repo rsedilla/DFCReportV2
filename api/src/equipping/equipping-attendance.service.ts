@@ -129,21 +129,6 @@ export function unrecordedState(expected: string, now: Date): LessonState {
   return due !== null && now.getTime() >= due.getTime() ? 'LATE' : 'TO_RECORD';
 }
 
-/**
- * **SOL 1's final grades and posting are not built yet** (decision 0514): they come with step 3 of
- * SOL 1, its register having come with step 2. Until then a SOL 1 class reaches none of Life
- * Class's grading, whose nine lessons, Encounter and posting would grade it and file a Life Class
- * graduation. Removed by the step that builds it.
- */
-export function refuseSolNotBuilt(cls: { name: string; level: string }): void {
-  if (cls.level !== 'LIFE_CLASS') {
-    throw new InvariantViolationError(
-      `${cls.name} is a SOL 1 class, and SOL 1's grades are not built yet.`,
-      { field: 'class_id' },
-    );
-  }
-}
-
 interface ClassRow {
   id: string;
   name: string;
