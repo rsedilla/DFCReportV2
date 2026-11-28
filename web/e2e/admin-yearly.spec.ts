@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
-import { mockCellReport, mockDccReport } from './mock-attendance';
 import { mockChurchCounts, mockTrends } from './mock-senior-pastor';
 
 /**
@@ -14,8 +13,6 @@ async function admin(page: Page) {
   await page.clock.setFixedTime(new Date('2026-10-08T02:00:00Z'));
   await mockSignedIn(page);
   await mockWholeChurchReader(page);
-  await mockCellReport(page);
-  await mockDccReport(page);
   await mockChurchCounts(page);
   return mockTrends(page);
 }

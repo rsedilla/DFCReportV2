@@ -6,7 +6,7 @@ import {
   mockPeople,
   mockSignedIn,
 } from './mock-api';
-import { mockCellReport, mockCellTwelve } from './mock-attendance';
+import { mockCellTwelve } from './mock-attendance';
 import { SP_PRIMARIES, SP_WOMENS_ROOT } from './mock-senior-pastor';
 
 /**
@@ -157,7 +157,6 @@ test.describe("a Network Admin's reports", () => {
   test('asks the Cell report for their Network, never the whole church', async ({ page }) => {
     await mockSignedIn(page);
     await mockNetworkAdmin(page);
-    await mockCellReport(page);
     const asked = await mockCellTwelve(page);
 
     await page.goto('/reports/cells');

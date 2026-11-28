@@ -2,11 +2,9 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
-  mockCellReport,
   mockCellTwelve,
   mockCells,
   mockDccEvents,
-  mockDccReport,
   mockDccTwelve,
 } from './mock-attendance';
 import {
@@ -126,10 +124,8 @@ async function mockEveryReport(page: Page, { church = false }: { church?: boolea
     await mockWholeChurchReader(page);
   }
   await mockCells(page);
-  await mockCellReport(page);
   await mockCellTwelve(page, { today: '2026-06-20' });
   await mockDccEvents(page);
-  await mockDccReport(page);
   await mockDccTwelve(page, { today: '2026-06-20' });
   await mockSuynl(page);
   await mockEncounterSeasons(page);
@@ -364,7 +360,6 @@ test.describe('the browser Back button', () => {
     await page.clock.setFixedTime(NOW);
     await mockSignedIn(page);
     await mockWholeChurchReader(page);
-    await mockDccReport(page);
     await mockDccTwelve(page, { today: '2026-06-20' });
     await page.goto('/reports/dcc');
 
@@ -454,9 +449,7 @@ test.describe('how these are counted', () => {
   test('neither attendance report offers the explainer any more (decision 0343)', async ({ page }) => {
     await mockSignedIn(page);
     await mockCells(page);
-    await mockCellReport(page);
     await mockDccEvents(page);
-    await mockDccReport(page);
     await mockDccTwelve(page);
 
     await page.goto('/reports/cells');
@@ -563,8 +556,6 @@ test.describe('Cell Groups and DCC keep coverage first, as one line linking nowh
       if (church) {
         await mockWholeChurchReader(page);
       }
-      await mockCellReport(page);
-      await mockDccReport(page);
       await mockCellTwelve(page, { today: '2026-06-20' });
       await mockDccTwelve(page, { today: '2026-06-20' });
 

@@ -2,9 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 import { mockSignedIn, mockWholeChurchReader } from './mock-api';
 import {
-  mockCellReport,
   mockCellTwelve,
-  mockDccReport,
   mockDccTwelve,
   TWELVE,
 } from './mock-attendance';
@@ -98,7 +96,6 @@ for (const report of [
     name: 'DCC',
     path: '/reports/dcc',
     arrange: async (page: Page) => {
-      await mockDccReport(page);
       await mockDccTwelve(page, { today: TODAY });
     },
   },
@@ -106,7 +103,6 @@ for (const report of [
     name: 'Cell Groups',
     path: '/reports/cells',
     arrange: async (page: Page) => {
-      await mockCellReport(page);
       await mockCellTwelve(page, { today: TODAY });
     },
   },

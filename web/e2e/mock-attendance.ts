@@ -1033,55 +1033,6 @@ export async function mockClosedDccRoster(page: Page): Promise<void> {
 }
 
 /**
- * The two monthly reports.
- *
- * **The aggregate arm carries no `n` and no `buckets`**, which is section 12's
- * structural rule rather than an omission: `N` belongs to a Cell, so an aggregate
- * `Completed` would mean "attended everything their own Cell happened to record".
- * The fixture is shaped like the API's own response so the screen is scanned
- * rendering what it will actually receive.
- *
- * The DCC one carries a removed Sunday, because section 9 requires a removal to be
- * named on any report covering the month.
- */
-export async function mockCellReport(page: Page): Promise<void> {
-  await page.route('**/api/v1/reports/cells/monthly*', (route) =>
-    route.fulfill(
-      json({
-        scope: { kind: 'LEADER', person_id: LEADER_ID },
-        period: '2026-06-01',
-        open: false,
-        unique_people: 9,
-        classification: { vip: 2, second_timer: 1, third_timer: 1, fourth_timer: 2, regular: 3 },
-        coverage: { recorded: 6, scheduled: 8 },
-      }),
-    ),
-  );
-}
-
-export async function mockDccReport(page: Page): Promise<void> {
-  await page.route('**/api/v1/reports/dcc/monthly*', (route) =>
-    route.fulfill(
-      json({
-        scope: { kind: 'LEADER', person_id: LEADER_ID },
-        period: '2026-06-01',
-        open: false,
-        n: 3,
-        removed_events: ['2026-06-14'],
-        unique_people: 7,
-        classification: { vip: 1, second_timer: 2, third_timer: 1, fourth_timer: 1, regular: 2 },
-        buckets: [
-          { times: 1, people: 2, completed: false },
-          { times: 2, people: 3, completed: false },
-          { times: 3, people: 2, completed: true },
-        ],
-        coverage: { met: 12, owed: 18 },
-      }),
-    ),
-  );
-}
-
-/**
  * A Cell's current members.
  *
  * Two rows and no next page, which is what a real Cell looks like at this church's
