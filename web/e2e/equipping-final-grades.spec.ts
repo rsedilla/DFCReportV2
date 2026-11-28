@@ -103,3 +103,40 @@ test('SOL 1 grades show the five checks beside the grade, with no Not yet (decis
   await dialog.getByRole('button', { name: 'Post grades' }).click();
   await expect.poll(() => sent.length).toBe(1);
 });
+
+test('the Admin changes a SOL record after posting, recorded wrongly only (decision 0514)', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await mockSignedIn(page);
+  await mockRegistrar(page);
+  await mockFinalGrades(page, 'POSTED');
+  const { sent } = await mockSolFinalGrades(page, { posted: true });
+  await page.goto('/equipping/final-grades');
+  await page.getByRole('button', { name: /SOL 1/ }).first().click();
+  await page.getByRole('button', { name: 'Change Nestor Villamor’s record' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Change Nestor Villamor’s record' });
+  await dialog.getByLabel('What to change').selectOption('DEVOTIONAL');
+  await dialog.getByLabel('Lesson').selectOption('7');
+  await expect(dialog.getByLabel('Lesson')).toContainText('L7');
+  await dialog.getByRole('radio', { name: 'Handed in', exact: true }).check();
+  await dialog.getByLabel('Handed in on').fill('2027-01-11');
+  // One reason only: what was still owed at posting is a retake (owner, 2026-11-26).
+  await expect(dialog.getByRole('radio')).toHaveCount(3);
+  await expect(dialog.getByRole('radio', { name: 'Recorded wrongly' })).toBeChecked();
+  await expect(dialog.getByRole('radio', { name: /after posting/ })).toHaveCount(0);
+  await dialog.getByLabel('Details (required)').fill('Handed in at L7 itself; the Teacher missed the tick.');
+  await expect(dialog.getByText('Grade stays ✗ Not passed')).toBeVisible();
+  await dialog.getByRole('button', { name: 'Review change' }).click();
+  const confirm = page.getByRole('dialog', { name: 'Save this change?' });
+  await expect(confirm).toContainText('L7 devotional: not handed in → handed in');
+  await confirm.getByRole('button', { name: 'Save change' }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0].body).toEqual({
+    item: 'DEVOTIONAL',
+    lesson: 7,
+    handed_in: true,
+    brought_on: '2027-01-11',
+    why: 'RECORDED_WRONGLY',
+    details: 'Handed in at L7 itself; the Teacher missed the tick.',
+    changes_seen: 0,
+  });
+});

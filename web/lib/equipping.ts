@@ -861,14 +861,38 @@ export interface EncounterChange {
 export type EnrollmentEffect = 'ENDS' | 'REOPENS';
 
 /** One change of a posted grade, as its history lists it (decision 0513). */
+/** What a SOL change reaches (decision 0514, point 12); a Life Class change is attendance. */
+export type GradeChangeItem = 'ATTENDANCE' | 'VERSE' | 'DEVOTIONAL' | 'QUIZ' | 'BOOK';
+
+/** One change, as the change dialog sends it. */
+export interface GradeChangeInput {
+  item?: GradeChangeItem;
+  lesson?: number;
+  to?: GradeChangeTo;
+  made_up_on?: string;
+  handed_in?: boolean;
+  brought_on?: string;
+  try?: number;
+  score?: number;
+  read?: boolean;
+}
+
 export interface GradeChange {
   at: string;
   by: string | null;
-  lesson: number;
-  sign_before: GradeChangeSign;
+  item?: GradeChangeItem;
+  lesson: number | null;
+  sign_before: GradeChangeSign | null;
   made_up_on_before: string | null;
-  sign_after: GradeChangeTo;
+  sign_after: GradeChangeTo | null;
   made_up_on_after: string | null;
+  /** SOL: a verse or devotional HANDED_IN or NOT_HANDED_IN, the book READ or NOT_READ. */
+  value_before?: string | null;
+  value_after?: string | null;
+  brought_on?: string | null;
+  quiz_try?: number | null;
+  score_before?: number | null;
+  score_after?: number | null;
   why: GradeChangeWhy;
   details: string;
   grade_before: FinalGrade;
@@ -928,6 +952,9 @@ export interface ClassGrades {
         recorded_in?: string | null;
         /** Kept from an earlier term, where a change keeps the join at Lesson 6 (point 12). */
         kept?: boolean;
+        /** SOL: whether the lesson's verse and devotional count; null for a lesson not done. */
+        verse?: boolean | null;
+        devotional?: boolean | null;
       }[];
       why: string | null;
     };
@@ -938,14 +965,17 @@ export interface ClassGrades {
 
 /** What a change would make the grade (decision 0513). */
 export interface GradeChangePreview {
-  lesson: number;
-  sign_before: GradeChangeSign;
-  made_up_on_before: string | null;
+  item?: GradeChangeItem;
+  lesson: number | null;
+  sign_before?: GradeChangeSign;
+  made_up_on_before?: string | null;
+  /** SOL: later tries a correction to a pass leaves kept and no longer counted. */
+  not_counted?: number[];
   grade_before: FinalGrade;
   reason_before: string;
   grade_after: FinalGrade;
   reason_after: string;
-  joins_at_lesson_6_after: boolean;
+  joins_at_lesson_6_after?: boolean;
   training: 'FILES' | 'WITHDRAWS' | null;
   encounter_change?: EncounterChange | null;
   enrollment?: EnrollmentEffect | null;
@@ -953,12 +983,14 @@ export interface GradeChangePreview {
 
 export async function previewGradeChange(
   finalGradeId: string,
-  input: { lesson: number; to: GradeChangeTo; made_up_on?: string },
+  input: GradeChangeInput,
   signal?: AbortSignal,
 ): Promise<GradeChangePreview> {
-  const query = new URLSearchParams({ lesson: String(input.lesson), to: input.to });
-  if (input.made_up_on !== undefined) {
-    query.set('made_up_on', input.made_up_on);
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) {
+      query.set(key, String(value));
+    }
   }
   return authenticatedRequest(
     `/api/v1/equipping/final-grades/grades/${encodeURIComponent(finalGradeId)}/change-preview?${query.toString()}`,
@@ -968,10 +1000,7 @@ export async function previewGradeChange(
 
 export async function changeGrade(
   finalGradeId: string,
-  body: {
-    lesson: number;
-    to: GradeChangeTo;
-    made_up_on?: string;
+  body: GradeChangeInput & {
     why: GradeChangeWhy;
     details: string;
     changes_seen: number;

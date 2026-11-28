@@ -39,7 +39,7 @@ import {
 import { lifeClassFiledOf, type LifeClassFiled } from './life-class-from-school';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
-import type { Database, GradeChangeSign } from '../database/schema';
+import type { Database, GradeChangeItem, GradeChangeSign } from '../database/schema';
 import type { EquippingTermDto } from './dto/equipping.dto';
 import { bySchoolName, schoolPerson } from './school-order';
 
@@ -106,6 +106,49 @@ type EncounterNow = 'CAME' | 'MISSED' | 'ENROLLED' | 'NONE';
 
 /** What a change sets a lesson to (decision 0513). */
 export type ChangeTo = 'CAME' | 'ABSENT' | 'MADE_UP';
+
+/**
+ * What one change asks for. A Life Class change names a lesson and what it becomes (decision
+ * 0513); a SOL change names what it reaches, its item (decision 0514, point 12), and that item's
+ * new value: a lesson's attendance as Life Class's, a verse or devotional handed in or not with
+ * the day it was, a quiz try's score, or *Book read*.
+ */
+export interface GradeChangeInput {
+  item?: GradeChangeItem;
+  lesson?: number;
+  to?: ChangeTo;
+  made_up_on?: string;
+  handed_in?: boolean;
+  brought_on?: string;
+  try?: number;
+  score?: number;
+  read?: boolean;
+}
+
+type GradeChangeBody = GradeChangeInput & {
+  why: 'MADE_UP_AFTER_POSTING' | 'RECORDED_WRONGLY';
+  details: string;
+  changes_seen: number;
+};
+
+/** A Life Class change's lesson and value, which it must name. */
+function lifeClassInput(input: GradeChangeInput): {
+  lesson: number;
+  to: ChangeTo;
+  made_up_on?: string;
+} {
+  if (input.item !== undefined && input.item !== 'ATTENDANCE') {
+    throw new ValidationFailedError('A Life Class change reaches a lesson’s attendance.', {
+      field: 'item',
+    });
+  }
+  if (input.lesson === undefined || input.to === undefined) {
+    throw new ValidationFailedError('Say which lesson and what it becomes.', {
+      field: input.lesson === undefined ? 'lesson' : 'to',
+    });
+  }
+  return { lesson: input.lesson, to: input.to, made_up_on: input.made_up_on };
+}
 
 interface CheckRow {
   id: string;
@@ -197,13 +240,7 @@ export class EquippingGradesService {
           standing.students.flatMap((s) => (s.posted === null ? [] : [s.posted.final_grade_id])),
         )
       : new Map<string, Record<string, unknown>[]>();
-    // A SOL class's posted grades are not changed yet (decision 0514, point 12): its screen comes
-    // after this step.
-    const changes =
-      options.history &&
-      standing.posting !== null &&
-      admin &&
-      standing.class.level === 'LIFE_CLASS';
+    const changes = options.history && standing.posting !== null && admin;
     const registeredLater = changes
       ? await this.registeredLaterOf(
           this.db,
@@ -240,11 +277,13 @@ export class EquippingGradesService {
                 changes_seen: s.posted.changes,
                 // The lessons a change may reach, each as the register reads it now.
                 changeable: changes
-                  ? changeableOf(s, registeredLater.has(canonicalId(s.enrollment_id)))
+                  ? s.sol === null
+                    ? changeableOf(s, registeredLater.has(canonicalId(s.enrollment_id)))
+                    : solChangeableOf(s, registeredLater.has(canonicalId(s.enrollment_id)))
                   : { lessons: [], why: null },
                 // The Encounter the grade as it stands read, beside the one it reads now, when they
                 // differ (decision 0513, point 14).
-                encounter_change: changes ? encounterChangeOf(s) : null,
+                encounter_change: changes && s.sol === null ? encounterChangeOf(s) : null,
                 history: history.get(s.posted.final_grade_id) ?? [],
               }),
         }))
@@ -445,14 +484,19 @@ export class EquippingGradesService {
    */
   async previewChange(
     finalGradeId: string,
-    input: { lesson: number; to: ChangeTo; made_up_on?: string },
+    input: GradeChangeInput,
   ): Promise<Record<string, unknown>> {
     const classId = await this.classOfGrade(this.db, finalGradeId);
     const standing = await this.standingWithin(this.db, classId);
     const student = studentOfGrade(standing.students, finalGradeId);
+    if (standing.class.level !== 'LIFE_CLASS') {
+      const plan = await this.planSolChange(this.db, standing, student, input);
+      return solPreviewShape(plan);
+    }
     const today = manilaDayOf(await databaseNow(this.db));
-    const plan = await this.planChange(this.db, student, input, today);
-    return previewShape(input.lesson, plan);
+    const lesson = lifeClassInput(input);
+    const plan = await this.planChange(this.db, student, lesson, today);
+    return previewShape(lesson.lesson, plan);
   }
 
   /**
@@ -466,14 +510,7 @@ export class EquippingGradesService {
   async change(
     actor: Actor,
     finalGradeId: string,
-    body: {
-      lesson: number;
-      to: ChangeTo;
-      made_up_on?: string;
-      why: 'MADE_UP_AFTER_POSTING' | 'RECORDED_WRONGLY';
-      details: string;
-      changes_seen: number;
-    },
+    body: GradeChangeBody,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     try {
@@ -494,7 +531,7 @@ export class EquippingGradesService {
   private async changeWithin(
     actor: Actor,
     finalGradeId: string,
-    body: Parameters<EquippingGradesService['change']>[2],
+    body: GradeChangeBody,
     claim: CurrentClaim,
   ): Promise<Record<string, unknown>> {
     return this.db.transaction().execute(async (trx) => {
@@ -522,18 +559,24 @@ export class EquippingGradesService {
           { field: 'changes_seen', current: student.posted!.changes },
         );
       }
+      // **A SOL grade by what SOL grades by** (decision 0514, point 12).
+      if (standing.class.level !== 'LIFE_CLASS') {
+        return this.solChangeWithin(trx, actor, standing, student, body, claim);
+      }
       const now = await databaseNow(trx);
       const today = manilaDayOf(now);
-      const plan = await this.planChange(trx, student, body, today);
+      const lesson = lifeClassInput(body);
+      body = { ...body, ...lesson };
+      const plan = await this.planChange(trx, student, lesson, today);
       // The change first: the database admits a mark or make-up of a posted class only beside it.
       const recorded = await trx
         .insertInto('equipping_grade_changes')
         .values({
           final_grade_id: finalGradeId,
-          lesson: body.lesson,
+          lesson: body.lesson!,
           sign_before: plan.signBefore,
           made_up_on_before: plan.madeUpOnBefore,
-          sign_after: body.to,
+          sign_after: body.to!,
           made_up_on_after: body.to === 'MADE_UP' ? body.made_up_on! : null,
           why: body.why,
           details: body.details,
@@ -564,7 +607,11 @@ export class EquippingGradesService {
         .returning(['id', 'changed_at'])
         .executeTakeFirstOrThrow();
 
-      await this.writeRegisterChangeWithin(trx, actor, plan.entry, body);
+      await this.writeRegisterChangeWithin(trx, actor, plan.entry, {
+        to: body.to!,
+        made_up_on: body.made_up_on,
+        details: body.details,
+      });
 
       // **The register and the grade agree** (0501, point 15): worked out again from what was
       // written, the grade is the one recorded on the change, or nothing is kept.
@@ -657,7 +704,7 @@ export class EquippingGradesService {
         before: {
           class_id: classId,
           class_name: standing.class.name,
-          lesson: body.lesson,
+          lesson: lesson.lesson,
           sign: plan.signBefore,
           made_up_on: plan.madeUpOnBefore,
           grade: student.grade,
@@ -666,9 +713,9 @@ export class EquippingGradesService {
         after: {
           class_id: classId,
           class_name: standing.class.name,
-          lesson: body.lesson,
-          sign: body.to,
-          made_up_on: body.to === 'MADE_UP' ? body.made_up_on! : null,
+          lesson: lesson.lesson,
+          sign: lesson.to,
+          made_up_on: lesson.to === 'MADE_UP' ? lesson.made_up_on! : null,
           grade: plan.after.grade,
           reason: plan.after.reason,
           why: body.why,
@@ -690,6 +737,627 @@ export class EquippingGradesService {
     });
   }
 
+  /**
+   * **What a change of a SOL grade does** (decision 0514, point 12; owner rulings of 2026-11-26),
+   * refused as it would be on saving. A change after posting corrects what was **recorded
+   * wrongly**, so what it says happened, happened on or before the day the class was posted;
+   * anything still owed then is a retake (point 12, "Keep Not passed"). The grade is worked out
+   * from the records with that one item changed, as posting worked it out.
+   */
+  private async planSolChange(
+    executor: Db | Transaction<Database>,
+    standing: Awaited<ReturnType<EquippingGradesService['standingWithin']>>,
+    student: StudentGrade & PostedFacts,
+    input: GradeChangeInput,
+  ) {
+    const sol = student.sol!;
+    const postedOn = manilaDayOf(standing.posting!.posted_at);
+    const item: GradeChangeItem = input.item ?? 'ATTENDANCE';
+    // A record changed since in a way that no longer gives the grade is not folded into a change.
+    const live = solGradeOf(student.register, sol);
+    if (live.grade !== student.grade || live.reason !== student.reason) {
+      throw new InvariantViolationError(
+        'Their records have changed since this grade was set, so nothing is changed here.',
+        { field: 'item' },
+      );
+    }
+    if ((await this.registeredLaterOf(executor, [student.enrollment_id])).size > 0) {
+      throw new InvariantViolationError(LATER_TERM, { field: 'item' });
+    }
+    const register = new Map(student.register);
+    let scores = [...sol.quiz.scores];
+    let read = sol.book;
+    const facts = {
+      item,
+      lesson: null as number | null,
+      entry: null as RegisterEntry | null,
+      signBefore: null as GradeChangeSign | null,
+      madeUpOnBefore: null as string | null,
+      signAfter: null as ChangeTo | null,
+      madeUpOnAfter: null as string | null,
+      valueBefore: null as string | null,
+      valueAfter: null as string | null,
+      broughtOn: null as string | null,
+      owedSince: null as string | null,
+      quizTry: null as number | null,
+      scoreBefore: null as number | null,
+      scoreAfter: null as number | null,
+      /** The tries a correction to a pass leaves behind, kept and no longer counted. */
+      laterTries: [] as number[],
+      /** Days brought late an attendance change leaves standing on nothing, closed with it. */
+      dropBrought: [] as ('VERSE' | 'DEVOTIONAL')[],
+    };
+    const lessonEntry = () => {
+      if (
+        input.lesson === undefined ||
+        !(SOL_LESSONS as readonly number[]).includes(input.lesson)
+      ) {
+        throw new ValidationFailedError('Say which lesson, 1 to 10.', { field: 'lesson' });
+      }
+      const entry = register.get(input.lesson);
+      if (entry === undefined) {
+        throw new InvariantViolationError(`L${input.lesson} was not recorded for them.`, {
+          field: 'lesson',
+        });
+      }
+      facts.lesson = input.lesson;
+      facts.entry = entry;
+      return entry;
+    };
+    if (item !== 'ATTENDANCE' && (input.to !== undefined || input.made_up_on !== undefined)) {
+      throw new ValidationFailedError('Only attendance is changed to Came, Absent or Made up.', {
+        field: 'to',
+      });
+    }
+
+    if (item === 'ATTENDANCE') {
+      if (input.to === undefined) {
+        throw new ValidationFailedError('Say what the lesson becomes.', { field: 'to' });
+      }
+      if ((input.to === 'MADE_UP') !== (input.made_up_on !== undefined)) {
+        throw new ValidationFailedError(
+          input.to === 'MADE_UP' ? 'Say the day it was made up.' : 'Only a make-up carries a date.',
+          { field: 'made_up_on' },
+        );
+      }
+      const entry = lessonEntry();
+      const signBefore = signOf(entry);
+      const madeUpOnBefore = signBefore === 'MADE_UP' ? entry.madeUpOn : null;
+      if (signBefore === 'BEFORE_JOINING' && input.to !== 'MADE_UP') {
+        throw new InvariantViolationError(
+          `They joined after L${input.lesson}, so it is made up, not marked.`,
+          { field: 'to' },
+        );
+      }
+      if (
+        input.to === signBefore &&
+        (input.to !== 'MADE_UP' || input.made_up_on === madeUpOnBefore)
+      ) {
+        throw new InvariantViolationError(`L${input.lesson} already reads that.`, { field: 'to' });
+      }
+      if (
+        input.to === 'MADE_UP' &&
+        (input.made_up_on! < entry.heldOn || input.made_up_on! > postedOn)
+      ) {
+        throw new ValidationFailedError(
+          'A make-up recorded wrongly falls between the missed lesson and the day the class was posted.',
+          { field: 'made_up_on' },
+        );
+      }
+      // A verse and devotional stay with a lesson still done, and none is kept for an absence.
+      const carried = done(entry)
+        ? { verse: entry.verse ?? false, devotional: entry.devotional ?? false }
+        : { verse: false, devotional: false };
+      // **A correction to attendance keeps the lesson's verse and devotional as recorded**
+      // (owner, 2026-11-26, "keep them"): a mistake in attendance does not make them wrong too, and
+      // one that was is its own change. Only an absence clears them, a lesson not done counting
+      // neither; a day it was brought is then closed rather than left to count on its own.
+      const clears = input.to === 'ABSENT';
+      const keeps = (day: string | null) => day !== null && !clears;
+      facts.dropBrought = [
+        ...(entry.verseBroughtOn !== null && !keeps(entry.verseBroughtOn)
+          ? (['VERSE'] as const)
+          : []),
+        ...(entry.devotionalBroughtOn !== null && !keeps(entry.devotionalBroughtOn)
+          ? (['DEVOTIONAL'] as const)
+          : []),
+      ];
+      register.set(input.lesson!, {
+        ...entry,
+        came: input.to === 'CAME',
+        madeUpOn: input.to === 'MADE_UP' ? input.made_up_on! : null,
+        beforeJoining: input.to === 'MADE_UP' ? entry.beforeJoining : false,
+        verse: input.to === 'ABSENT' ? null : carried.verse,
+        devotional: input.to === 'ABSENT' ? null : carried.devotional,
+        verseBroughtOn: keeps(entry.verseBroughtOn) ? entry.verseBroughtOn : null,
+        devotionalBroughtOn: keeps(entry.devotionalBroughtOn) ? entry.devotionalBroughtOn : null,
+      });
+      facts.signBefore = signBefore;
+      facts.madeUpOnBefore = madeUpOnBefore;
+      facts.signAfter = input.to;
+      facts.madeUpOnAfter = input.to === 'MADE_UP' ? input.made_up_on! : null;
+    } else if (item === 'VERSE' || item === 'DEVOTIONAL') {
+      const word = item === 'VERSE' ? 'memory verse' : 'devotional';
+      if (input.handed_in === undefined) {
+        throw new ValidationFailedError(`Say whether the ${word} was handed in.`, {
+          field: 'handed_in',
+        });
+      }
+      const entry = lessonEntry();
+      if (!done(entry)) {
+        throw new InvariantViolationError(
+          `They missed L${input.lesson} and did not make it up, so its ${word} is not counted.`,
+          { field: 'lesson' },
+        );
+      }
+      const kept = item === 'VERSE' ? verseKept(entry) : devotionalKept(entry);
+      if (kept === input.handed_in) {
+        throw new InvariantViolationError(`L${input.lesson}’s ${word} already reads that.`, {
+          field: 'handed_in',
+        });
+      }
+      const owedSince = entry.came ? entry.heldOn : entry.madeUpOn!;
+      if (input.handed_in) {
+        if (input.brought_on === undefined) {
+          throw new ValidationFailedError('Say the day it was handed in.', { field: 'brought_on' });
+        }
+        if (input.brought_on < owedSince || input.brought_on > postedOn) {
+          throw new ValidationFailedError(
+            'Handed in between the lesson, or its make-up, and the day the class was posted: a change after posting corrects what was recorded wrongly.',
+            { field: 'brought_on' },
+          );
+        }
+      } else if (input.brought_on !== undefined) {
+        throw new ValidationFailedError('Only what was handed in carries a day.', {
+          field: 'brought_on',
+        });
+      }
+      // On the lesson's own day it is the lesson's tick; later, a day it was brought (point 10).
+      const onTheDay = input.handed_in && input.brought_on === owedSince;
+      const tick = input.handed_in ? onTheDay : false;
+      const broughtOn = input.handed_in && !onTheDay ? input.brought_on! : null;
+      register.set(
+        input.lesson!,
+        item === 'VERSE'
+          ? {
+              ...entry,
+              verse: tick || (input.handed_in ? entry.verse : false),
+              verseBroughtOn: broughtOn,
+            }
+          : {
+              ...entry,
+              devotional: tick || (input.handed_in ? entry.devotional : false),
+              devotionalBroughtOn: broughtOn,
+            },
+      );
+      facts.valueBefore = kept ? 'HANDED_IN' : 'NOT_HANDED_IN';
+      facts.valueAfter = input.handed_in ? 'HANDED_IN' : 'NOT_HANDED_IN';
+      facts.broughtOn = input.handed_in ? input.brought_on! : null;
+      facts.owedSince = owedSince;
+    } else if (item === 'QUIZ') {
+      const items = sol.quiz.items;
+      if (items === null) {
+        throw new InvariantViolationError('No quiz was recorded for this class.', { field: 'try' });
+      }
+      if (input.try === undefined || input.score === undefined) {
+        throw new ValidationFailedError('Say which try and its score.', {
+          field: input.try === undefined ? 'try' : 'score',
+        });
+      }
+      if (input.score > items) {
+        throw new ValidationFailedError(`A score is at most the quiz’s ${items} items.`, {
+          field: 'score',
+        });
+      }
+      const at = input.try;
+      if (at <= scores.length) {
+        facts.scoreBefore = scores[at - 1];
+        if (facts.scoreBefore === input.score) {
+          throw new InvariantViolationError(`Try ${at} already reads that.`, { field: 'score' });
+        }
+        scores[at - 1] = input.score;
+        if (passesQuiz(input.score, items)) {
+          facts.laterTries = scores.slice(at).map((_, index) => at + 1 + index);
+          scores = scores.slice(0, at);
+        }
+      } else {
+        // **Only a try already recorded is corrected** (owner, 2026-11-26, "No, correct only"):
+        // one not recorded before the class was posted is a retake, nothing being able to date it
+        // before posting.
+        throw new InvariantViolationError(
+          `Try ${at} was not recorded before the class was posted, so it is not added here: it is a retake.`,
+          {
+            field: 'try',
+          },
+        );
+      }
+      facts.quizTry = at;
+      facts.scoreAfter = input.score;
+    } else {
+      if (input.read === undefined) {
+        throw new ValidationFailedError('Say whether the book was read.', { field: 'read' });
+      }
+      if (input.read === read) {
+        throw new InvariantViolationError('Book read already reads that.', { field: 'read' });
+      }
+      facts.valueBefore = read ? 'READ' : 'NOT_READ';
+      facts.valueAfter = input.read ? 'READ' : 'NOT_READ';
+      read = input.read;
+    }
+    if ((item === 'QUIZ' || item === 'BOOK') && input.lesson !== undefined) {
+      throw new ValidationFailedError('A quiz try and the book name no lesson.', {
+        field: 'lesson',
+      });
+    }
+
+    const key = canonicalId(student.enrollment_id);
+    const checklist = solChecklistOf(
+      register,
+      {
+        items: sol.quiz.items,
+        scores: new Map([[key, scores]]),
+        read: read ? new Set([key]) : new Set(),
+      },
+      student.enrollment_id,
+    );
+    const after = solGradeOf(register, checklist);
+    // What the school's SOL 1 stands filed under now: the latest change's instant, or posting's.
+    const current = await executor
+      .selectFrom('equipping_current_grades')
+      .select('life_class_filed_at')
+      .where('final_grade_id', '=', student.posted!.final_grade_id)
+      .executeTakeFirstOrThrow();
+    const filedAt =
+      student.grade === 'PASSED'
+        ? (current.life_class_filed_at ?? standing.posting!.posted_at)
+        : null;
+    return { ...facts, after, before: { grade: student.grade, reason: student.reason }, filedAt };
+  }
+
+  /** Saves a change of a SOL grade, inside `changeWithin`'s transaction and locks. */
+  private async solChangeWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    standing: Awaited<ReturnType<EquippingGradesService['standingWithin']>>,
+    student: StudentGrade & PostedFacts,
+    body: GradeChangeBody,
+    claim: CurrentClaim,
+  ): Promise<Record<string, unknown>> {
+    // **Recorded wrongly, and nothing else** (owner, 2026-11-26): what was still owed when the
+    // class was posted is a retake (point 12, "Keep Not passed").
+    if (body.why !== 'RECORDED_WRONGLY') {
+      throw new ValidationFailedError(
+        'A SOL grade is changed after posting only where something was recorded wrongly; what was still owed when the class was posted is a retake.',
+        { field: 'why' },
+      );
+    }
+    const classId = standing.class.id;
+    const finalGradeId = student.posted!.final_grade_id;
+    const plan = await this.planSolChange(trx, standing, student, body);
+    const recorded = await trx
+      .insertInto('equipping_grade_changes')
+      .values({
+        final_grade_id: finalGradeId,
+        item: plan.item,
+        lesson: plan.lesson,
+        sign_before: plan.signBefore,
+        made_up_on_before: plan.madeUpOnBefore,
+        sign_after: plan.signAfter,
+        made_up_on_after: plan.madeUpOnAfter,
+        value_before: plan.valueBefore,
+        value_after: plan.valueAfter,
+        brought_on: plan.broughtOn,
+        quiz_try: plan.quizTry,
+        score_before: plan.scoreBefore,
+        score_after: plan.scoreAfter,
+        why: body.why,
+        details: body.details,
+        grade_before: student.grade,
+        reason_before: student.reason,
+        grade_after: plan.after.grade,
+        reason_after: plan.after.reason,
+        lessons_kept_after: plan.after.lessons_kept,
+        lessons_made_up_after: plan.after.lessons_made_up,
+        joins_at_lesson_6_after: false,
+        encounter_before: null,
+        encounter_after: null,
+        enrollment_effect: null,
+        // What the school's SOL 1 stands filed under after it, as Life Class's is kept.
+        life_class_filed_at:
+          plan.after.grade !== 'PASSED' ? null : (plan.filedAt ?? sql<Date>`now()`),
+        changed_by: actor.accountId,
+        changer_person_id: actor.personId,
+      })
+      .returning(['id', 'changed_at'])
+      .executeTakeFirstOrThrow();
+
+    await this.writeSolChangeWithin(trx, actor, student, plan, body.details);
+
+    // **The records and the grade agree** (0501, point 15): worked out again from what was written.
+    const enrollment = await trx
+      .selectFrom('equipping_enrollments')
+      .select(['registration_id', 'started_at'])
+      .where('id', '=', student.enrollment_id)
+      .executeTakeFirstOrThrow();
+    const registers = await this.attendance.registersOf(trx, classId, [
+      {
+        enrollment_id: student.enrollment_id,
+        registration_id: enrollment.registration_id,
+        started_at: enrollment.started_at,
+      },
+    ]);
+    const register = registers.get(student.enrollment_id)!;
+    const quiz = await this.solQuizAndBookOf(trx, classId, [student.enrollment_id]);
+    const worked = solGradeOf(register, solChecklistOf(register, quiz, student.enrollment_id));
+    if (
+      worked.grade !== plan.after.grade ||
+      worked.reason !== plan.after.reason ||
+      worked.lessons_kept !== plan.after.lessons_kept ||
+      worked.lessons_made_up !== plan.after.lessons_made_up
+    ) {
+      throw new Error('A grade change wrote records whose grade differs from the one planned.');
+    }
+
+    // Training follows the grade (decision 0514, point 13): SOL 1 filed from the school, or withdrawn.
+    if (plan.filedAt === null && plan.after.grade === 'PASSED') {
+      await this.training.fileFromSchoolWithin(trx, {
+        personId: student.person_id,
+        program: 'SOL_1',
+        graduatedOn: manilaDayOf(recorded.changed_at),
+        accountId: actor.accountId,
+      });
+    } else if (plan.filedAt !== null && plan.after.grade !== 'PASSED') {
+      await this.training.withdrawFromSchoolWithin(trx, {
+        personId: student.person_id,
+        program: 'SOL_1',
+        graduatedOn: manilaDayOf(plan.filedAt),
+        accountId: actor.accountId,
+        reason: body.details,
+      });
+    }
+
+    const what = { item: plan.item, lesson: plan.lesson };
+    await this.audit.writeWithin(trx, {
+      actorId: actor.accountId,
+      action: 'equipping_final_grade.changed',
+      targetType: 'person',
+      targetId: student.person_id,
+      before: {
+        class_id: classId,
+        class_name: standing.class.name,
+        ...what,
+        sign: plan.signBefore,
+        made_up_on: plan.madeUpOnBefore,
+        value: plan.valueBefore,
+        quiz_try: plan.quizTry,
+        score: plan.scoreBefore,
+        grade: student.grade,
+        reason: student.reason,
+      },
+      after: {
+        class_id: classId,
+        class_name: standing.class.name,
+        ...what,
+        sign: plan.signAfter,
+        made_up_on: plan.madeUpOnAfter,
+        value: plan.valueAfter,
+        brought_on: plan.broughtOn,
+        quiz_try: plan.quizTry,
+        score: plan.scoreAfter,
+        ...(plan.laterTries.length > 0 ? { not_counted: plan.laterTries } : {}),
+        grade: plan.after.grade,
+        reason: plan.after.reason,
+        why: body.why,
+      },
+      reason: body.details,
+    });
+
+    const response = {
+      final_grade_id: finalGradeId,
+      change_id: recorded.id,
+      grade: plan.after.grade,
+      reason: plan.after.reason,
+      enrollment: null,
+      changes_seen: student.posted!.changes + 1,
+    };
+    await this.idempotency.completeWithin(trx, { ...claim, status: 201, body: response });
+    return response;
+  }
+
+  /**
+   * Writes a SOL change as a correction is written: the current row closed and kept, a new one
+   * opened (decision 0503), where the lesson was recorded. The database admits each beside the
+   * change row alone (migrations 0059 and 0063).
+   */
+  private async writeSolChangeWithin(
+    trx: Transaction<Database>,
+    actor: Actor,
+    student: StudentGrade & PostedFacts,
+    plan: Awaited<ReturnType<EquippingGradesService['planSolChange']>>,
+    details: string,
+  ): Promise<void> {
+    const close = { superseded_at: sql<Date>`now()`, superseded_by: actor.accountId };
+    if (plan.item === 'BOOK') {
+      await trx
+        .updateTable('equipping_books')
+        .set(close)
+        .where('enrollment_id', '=', student.enrollment_id)
+        .where('superseded_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('equipping_books')
+        .values({
+          enrollment_id: student.enrollment_id,
+          read: plan.valueAfter === 'READ',
+          recorded_by: actor.accountId,
+        })
+        .execute();
+      return;
+    }
+    if (plan.item === 'QUIZ') {
+      await trx
+        .updateTable('equipping_quiz_tries')
+        .set(close)
+        .where('enrollment_id', '=', student.enrollment_id)
+        .where('try', 'in', [plan.quizTry!, ...plan.laterTries])
+        .where('superseded_at', 'is', null)
+        .execute();
+      await trx
+        .insertInto('equipping_quiz_tries')
+        .values({
+          enrollment_id: student.enrollment_id,
+          try: plan.quizTry!,
+          score: plan.scoreAfter!,
+          recorded_by: actor.accountId,
+        })
+        .execute();
+      return;
+    }
+    const entry = plan.entry!;
+    const where = { lesson_id: entry.lessonId, enrollment_id: entry.enrollmentId };
+    if (plan.item === 'ATTENDANCE') {
+      const carried = done(entry)
+        ? { verse: entry.verse ?? false, devotional: entry.devotional ?? false }
+        : { verse: false, devotional: false };
+      // A make-up is closed first: a mark saying they came is refused while one stands.
+      await trx
+        .updateTable('equipping_make_ups')
+        .set(close)
+        .where('lesson_id', '=', where.lesson_id)
+        .where('enrollment_id', '=', where.enrollment_id)
+        .where('superseded_at', 'is', null)
+        .execute();
+      const to = plan.signAfter!;
+      const markWanted = to === 'CAME' ? true : to === 'ABSENT' ? false : entry.came ? false : null;
+      if (markWanted !== null) {
+        await trx
+          .updateTable('equipping_marks')
+          .set(close)
+          .where('lesson_id', '=', where.lesson_id)
+          .where('enrollment_id', '=', where.enrollment_id)
+          .where('superseded_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('equipping_marks')
+          .values({
+            ...where,
+            came: markWanted,
+            verse: markWanted ? carried.verse : null,
+            devotional: markWanted ? carried.devotional : null,
+            recorded_by: actor.accountId,
+            correction_reason: details,
+          })
+          .execute();
+      }
+      if (plan.dropBrought.length > 0) {
+        await trx
+          .updateTable('equipping_items_brought')
+          .set(close)
+          .where('lesson_id', '=', where.lesson_id)
+          .where('enrollment_id', '=', where.enrollment_id)
+          .where('item', 'in', plan.dropBrought)
+          .where('superseded_at', 'is', null)
+          .execute();
+      }
+      if (to === 'MADE_UP') {
+        await trx
+          .insertInto('equipping_make_ups')
+          .values({
+            ...where,
+            made_up_on: plan.madeUpOnAfter!,
+            verse: carried.verse,
+            devotional: carried.devotional,
+            recorded_by: actor.accountId,
+          })
+          .execute();
+      }
+      return;
+    }
+    // A verse or devotional: the lesson's own tick, or a day it was brought.
+    const column = plan.item === 'VERSE' ? 'verse' : 'devotional';
+    const itemName = plan.item === 'VERSE' ? 'VERSE' : 'DEVOTIONAL';
+    const handedIn = plan.valueAfter === 'HANDED_IN';
+    const onTheDay = handedIn && plan.broughtOn === plan.owedSince;
+    // Any day it was brought goes: none is left where it is not handed in, nor beside the tick.
+    if (!handedIn || onTheDay) {
+      await trx
+        .updateTable('equipping_items_brought')
+        .set(close)
+        .where('lesson_id', '=', where.lesson_id)
+        .where('enrollment_id', '=', where.enrollment_id)
+        .where('item', '=', itemName)
+        .where('superseded_at', 'is', null)
+        .execute();
+    }
+    const tickNow = (plan.item === 'VERSE' ? entry.verse : entry.devotional) === true;
+    const tickWanted = handedIn ? onTheDay || tickNow : false;
+    if (tickWanted !== tickNow) {
+      if (entry.came) {
+        const mark = await trx
+          .selectFrom('equipping_marks')
+          .select(['came', 'verse', 'devotional'])
+          .where('lesson_id', '=', where.lesson_id)
+          .where('enrollment_id', '=', where.enrollment_id)
+          .where('superseded_at', 'is', null)
+          .executeTakeFirstOrThrow();
+        await trx
+          .updateTable('equipping_marks')
+          .set(close)
+          .where('lesson_id', '=', where.lesson_id)
+          .where('enrollment_id', '=', where.enrollment_id)
+          .where('superseded_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('equipping_marks')
+          .values({
+            ...where,
+            came: mark.came,
+            verse: column === 'verse' ? tickWanted : mark.verse,
+            devotional: column === 'devotional' ? tickWanted : mark.devotional,
+            recorded_by: actor.accountId,
+            correction_reason: details,
+          })
+          .execute();
+      } else {
+        const makeUp = await trx
+          .selectFrom('equipping_make_ups')
+          .select(['made_up_on', 'verse', 'devotional'])
+          .where('lesson_id', '=', where.lesson_id)
+          .where('enrollment_id', '=', where.enrollment_id)
+          .where('superseded_at', 'is', null)
+          .executeTakeFirstOrThrow();
+        await trx
+          .updateTable('equipping_make_ups')
+          .set(close)
+          .where('lesson_id', '=', where.lesson_id)
+          .where('enrollment_id', '=', where.enrollment_id)
+          .where('superseded_at', 'is', null)
+          .execute();
+        await trx
+          .insertInto('equipping_make_ups')
+          .values({
+            ...where,
+            made_up_on: String(makeUp.made_up_on),
+            verse: column === 'verse' ? tickWanted : makeUp.verse,
+            devotional: column === 'devotional' ? tickWanted : makeUp.devotional,
+            recorded_by: actor.accountId,
+          })
+          .execute();
+      }
+    }
+    if (handedIn && !onTheDay) {
+      await trx
+        .insertInto('equipping_items_brought')
+        .values({
+          ...where,
+          item: itemName,
+          brought_on: plan.broughtOn!,
+          recorded_by: actor.accountId,
+        })
+        .execute();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -702,20 +1370,11 @@ export class EquippingGradesService {
     const row = await executor
       .selectFrom('equipping_final_grades as g')
       .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
-      .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
-      .select(['p.class_id', 'c.level', 'c.name'])
+      .select('p.class_id')
       .where('g.id', '=', finalGradeId)
       .executeTakeFirst();
     if (row === undefined) {
       throw new NotFoundError('No such grade.');
-    }
-    // **A SOL grade is changed after posting by the Admin** (decision 0514, point 12), on a screen
-    // not built yet; until it is, a change reaches Life Class alone.
-    if (row.level !== 'LIFE_CLASS') {
-      throw new InvariantViolationError(
-        `${row.name} is a SOL 1 class, and changing its grades after posting is not built yet.`,
-        { field: 'id' },
-      );
     }
     return row.class_id;
   }
@@ -1083,11 +1742,18 @@ export class EquippingGradesService {
           row.changer_person_id === null
             ? null
             : (names.get(row.changer_person_id)?.fullName ?? null),
+        item: row.item,
         lesson: row.lesson,
         sign_before: row.sign_before,
         made_up_on_before: row.made_up_on_before === null ? null : String(row.made_up_on_before),
         sign_after: row.sign_after,
         made_up_on_after: row.made_up_on_after === null ? null : String(row.made_up_on_after),
+        value_before: row.value_before,
+        value_after: row.value_after,
+        brought_on: row.brought_on === null ? null : String(row.brought_on),
+        quiz_try: row.quiz_try,
+        score_before: row.score_before,
+        score_after: row.score_after,
         why: row.why,
         details: row.details,
         grade_before: row.grade_before,
@@ -1096,6 +1762,7 @@ export class EquippingGradesService {
         reason_after: row.reason_after,
         // Where the change worked from an Encounter the grade before had not (point 14).
         encounter_change:
+          row.encounter_before === null ||
           (row.encounter_before === 'CAME') === (row.encounter_after === 'CAME')
             ? null
             : { before: row.encounter_before, now: row.encounter_after },
@@ -1747,6 +2414,66 @@ function previewShape(
           : null,
     encounter_change: plan.encounterChange,
     enrollment: plan.effect,
+  };
+}
+
+/** What the SOL change dialog lists (decision 0514, point 12): each lesson as it reads now. */
+function solChangeableOf(student: StudentGrade & PostedFacts, registeredLater: boolean) {
+  if (registeredLater) {
+    return { lessons: [], why: LATER_TERM };
+  }
+  const live = solGradeOf(student.register, student.sol!);
+  if (live.grade !== student.grade || live.reason !== student.reason) {
+    return {
+      lessons: [],
+      why: 'Their records have changed since this grade was set, so nothing is changed here.',
+    };
+  }
+  return {
+    lessons: SOL_LESSONS.flatMap((lesson) => {
+      const entry = student.register.get(lesson);
+      return entry === undefined
+        ? []
+        : [
+            {
+              lesson,
+              sign: signOf(entry),
+              made_up_on: entry.madeUpOn,
+              held_on: entry.heldOn,
+              verse: done(entry) ? verseKept(entry) : null,
+              devotional: done(entry) ? devotionalKept(entry) : null,
+            },
+          ];
+    }),
+    why: null,
+  };
+}
+
+/** A SOL change's preview: what the grade becomes, and what Training does. */
+function solPreviewShape(plan: {
+  item: GradeChangeItem;
+  lesson: number | null;
+  before: { grade: Grade; reason: string };
+  after: Omit<StudentGrade, 'enrollment_id' | 'person_id'>;
+  filedAt: Date | null;
+  laterTries: number[];
+}): Record<string, unknown> {
+  return {
+    item: plan.item,
+    lesson: plan.lesson,
+    grade_before: plan.before.grade,
+    reason_before: plan.before.reason,
+    grade_after: plan.after.grade,
+    reason_after: plan.after.reason,
+    not_counted: plan.laterTries,
+    training:
+      plan.filedAt === null && plan.after.grade === 'PASSED'
+        ? 'FILES'
+        : plan.filedAt !== null && plan.after.grade !== 'PASSED'
+          ? 'WITHDRAWS'
+          : null,
+    encounter_change: null,
+    enrollment: null,
   };
 }
 
