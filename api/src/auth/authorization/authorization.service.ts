@@ -76,6 +76,8 @@ interface ActiveRoles {
   coordinatesSol1: boolean;
   /** SOL 2 Coordinator (sections 7 and 29, decision 0516), read on the same row. */
   coordinatesSol2: boolean;
+  /** SOL 3 Coordinator (sections 7 and 29, decision 0517), read on the same row. */
+  coordinatesSol3: boolean;
 }
 
 /** Each level's Coordinator tick on `accounts` (decisions 0501, 0514 and 0516). */
@@ -83,6 +85,7 @@ const COORDINATES_COLUMN = {
   LIFE_CLASS: 'coordinates_life_class',
   SOL_1: 'coordinates_sol_1',
   SOL_2: 'coordinates_sol_2',
+  SOL_3: 'coordinates_sol_3',
 } as const satisfies Record<EquippingLevel, string>;
 
 /**
@@ -195,6 +198,7 @@ export class AuthorizationService {
         'accounts.coordinates_life_class',
         'accounts.coordinates_sol_1',
         'accounts.coordinates_sol_2',
+        'accounts.coordinates_sol_3',
       ])
       .where('account_roles.account_id', '=', accountId)
       .where('account_roles.revoked_at', 'is', null)
@@ -208,6 +212,7 @@ export class AuthorizationService {
       coordinatesLifeClass: rows.some((row) => row.coordinates_life_class),
       coordinatesSol1: rows.some((row) => row.coordinates_sol_1),
       coordinatesSol2: rows.some((row) => row.coordinates_sol_2),
+      coordinatesSol3: rows.some((row) => row.coordinates_sol_3),
       honoured: rows
         .filter((row) => this.roleIsHonoured(accountId, row.role, row.person_id))
         .map((row) => row.role),
@@ -637,7 +642,11 @@ export class AuthorizationService {
         ...ROLE_DEFAULTS[role],
         ...(ticked && roles.approvesCells ? LEADER_APPROVES_CELLS : {}),
         ...(ticked && roles.movesPeople ? LEADER_MOVES_PEOPLE : {}),
-        ...(ticked && (roles.coordinatesLifeClass || roles.coordinatesSol1 || roles.coordinatesSol2)
+        ...(ticked &&
+        (roles.coordinatesLifeClass ||
+          roles.coordinatesSol1 ||
+          roles.coordinatesSol2 ||
+          roles.coordinatesSol3)
           ? LEADER_COORDINATES
           : {}),
       };
@@ -901,6 +910,9 @@ export class AuthorizationService {
     }
     if (roles.coordinatesSol2) {
       levels.add('SOL_2');
+    }
+    if (roles.coordinatesSol3) {
+      levels.add('SOL_3');
     }
     return levels;
   }

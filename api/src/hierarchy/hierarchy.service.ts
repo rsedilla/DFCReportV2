@@ -1209,6 +1209,31 @@ export class HierarchyService {
   }
 
   /**
+   * The open assignments naming any of these leaders, as person and leader pairs: who each
+   * pastors now (section 5). For the SOL 3 Guide condition (decision 0501, point 4), which counts
+   * a Guide's own direct disciples leading an `ACTIVE` Cell, and never anyone further down.
+   */
+  async openDiscipleEdgesOf(
+    executor: Db,
+    leaderIds: readonly string[],
+  ): Promise<{ personId: string; leaderId: string }[]> {
+    if (leaderIds.length === 0) {
+      return [];
+    }
+
+    const rows = await executor
+      .selectFrom('pastoral_assignments')
+      .select(['person_id', 'leader_id'])
+      .where('leader_id', 'in', [...leaderIds])
+      .where('ended_at', 'is', null)
+      .execute();
+
+    return rows.flatMap((row) =>
+      row.leader_id === null ? [] : [{ personId: row.person_id, leaderId: row.leader_id }],
+    );
+  }
+
+  /**
    * Each person's leader on their most recent assignment naming one, open or closed, for the
    * Admin's *Archived* list (decision 0397): an archive ends the row and a restore opens
    * none, so it is the leader they had when they were archived. Absent where none ever did.

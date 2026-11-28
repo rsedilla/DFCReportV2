@@ -25,6 +25,7 @@ import {
   setCoordinatesLifeClass,
   setCoordinatesSol1,
   setCoordinatesSol2,
+  setCoordinatesSol3,
   setFullView,
   type AccountRole,
   type PersonAccount as PersonAccountRecord,
@@ -127,6 +128,7 @@ export function PersonAccount({
         current.coordinates_life_class && !leaderAccountsOnly ? 'Life Class Coordinator' : null,
         current.coordinates_sol_1 && !leaderAccountsOnly ? 'SOL 1 Coordinator' : null,
         current.coordinates_sol_2 && !leaderAccountsOnly ? 'SOL 2 Coordinator' : null,
+        current.coordinates_sol_3 && !leaderAccountsOnly ? 'SOL 3 Coordinator' : null,
       ].filter((tick): tick is string => tick !== null)
     : [];
   const heldByTheAdmin =
@@ -134,7 +136,8 @@ export function PersonAccount({
     (leaderAccountsOnly &&
       (current?.coordinates_life_class === true ||
         current?.coordinates_sol_1 === true ||
-        current?.coordinates_sol_2 === true));
+        current?.coordinates_sol_2 === true ||
+        current?.coordinates_sol_3 === true));
 
   // Side by side only where the page itself widens (decision 0462).
   return (
@@ -392,6 +395,18 @@ export function PersonAccount({
                       shown
                         ? `${firstName} opens the church's SOL 2 classes and names their Teachers, under Classes.`
                         : `${firstName} does not coordinate SOL 2.`
+                    }
+                  />
+                  <LeaderTickRow
+                    personId={personId}
+                    field="coordinates_sol_3"
+                    label="SOL 3 Coordinator"
+                    value={current.coordinates_sol_3 === true}
+                    save={(next) => setCoordinatesSol3(current.id, next, crypto.randomUUID())}
+                    describe={(shown) =>
+                      shown
+                        ? `${firstName} opens the church's SOL 3 classes and names their Teachers, under Classes.`
+                        : `${firstName} does not coordinate SOL 3.`
                     }
                   />
                 </>
@@ -758,7 +773,8 @@ function LeaderTickRow({
     | 'moves_people'
     | 'coordinates_life_class'
     | 'coordinates_sol_1'
-    | 'coordinates_sol_2';
+    | 'coordinates_sol_2'
+    | 'coordinates_sol_3';
   label: string;
   value: boolean;
   save: (next: boolean) => Promise<Record<string, unknown>>;

@@ -248,9 +248,10 @@ rewritten to remove that language, because resolving each by inference is how a
 false cross-reference gets introduced, and this log records enough of those
 already. Each file carries previous/next links instead, so a positional reference
 resolves exactly as well as it did in the single file and no better. *Recounted on
-2026-11-27, the trigger being decision 0516: of 515 files, 514 carry `Previous:`, 181 carry
-`Next:`, and 180 carry both on one line. 0213 through 0516 each moved the first two and
+2026-11-27, the trigger being decision 0517: of 516 files, 515 carry `Previous:`, 181 carry
+`Next:`, and 180 carry both on one line. 0213 through 0517 each moved the first two and
 neither of the others, none of them carrying a `Next:`. The recount before this one was dated
+2026-11-27 and triggered by 0516, and was left stale by 0517 the same day. The one before that was dated
 2026-11-25 and triggered by 0515, and was left stale by 0516 two days later. The one before that was dated
 2026-11-25 and triggered by 0514 meeting 0513 on `main`, and was left stale by 0515 the same day. The one before that was dated
 2026-11-23 and triggered by 0513, and was left stale by 0514 arriving on 2026-11-25;
@@ -1079,6 +1080,7 @@ one, in the paragraph whose subject is false cross-references, and
 - 2026-11-24 — [SOL 1 joins the school, with a Coordinator for each level](docs/decisions/0514-sol-1-joins-the-school-with-a-coordinator-for-each-level.md)
 - 2026-11-25 — [The school's lists are in last-name order, each name shown last name first](docs/decisions/0515-the-schools-lists-are-in-last-name-order.md)
 - 2026-11-27 — [SOL 2 joins the school as SOL 1 did, with one book and only the Admin ticking a pass from before it](docs/decisions/0516-sol-2-joins-the-school-as-sol-1-did.md)
+- 2026-11-27 — [SOL 3 joins the school as SOL 2 did, in one step, with one book and only the Admin ticking a pass from before it](docs/decisions/0517-sol-3-joins-the-school-as-sol-2-did.md)
 
 ### Open — awaiting a ruling
 

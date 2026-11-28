@@ -61,13 +61,20 @@ export type CoordinatesSol2Body = {
   coordinates_sol_2: boolean;
 };
 
+/** What setting SOL 3 Coordinator answers: the account's value after the change. */
+export type CoordinatesSol3Body = {
+  id: string;
+  coordinates_sol_3: boolean;
+};
+
 type LeaderTick =
   | 'full_view'
   | 'approves_cells'
   | 'moves_people'
   | 'coordinates_life_class'
   | 'coordinates_sol_1'
-  | 'coordinates_sol_2';
+  | 'coordinates_sol_2'
+  | 'coordinates_sol_3';
 
 /** Each tick's name in a refusal and its audit action (decisions 0323, 0352 and 0356). */
 const TICKS: Record<LeaderTick, { label: string; action: AuditAction }> = {
@@ -80,6 +87,7 @@ const TICKS: Record<LeaderTick, { label: string; action: AuditAction }> = {
   },
   coordinates_sol_1: { label: 'SOL 1 Coordinator', action: 'account.coordinates_sol_1_changed' },
   coordinates_sol_2: { label: 'SOL 2 Coordinator', action: 'account.coordinates_sol_2_changed' },
+  coordinates_sol_3: { label: 'SOL 3 Coordinator', action: 'account.coordinates_sol_3_changed' },
 };
 
 /**
@@ -92,6 +100,7 @@ const NEEDS_FULL_VIEW: readonly Exclude<LeaderTick, 'full_view'>[] = [
   'coordinates_life_class',
   'coordinates_sol_1',
   'coordinates_sol_2',
+  'coordinates_sol_3',
 ];
 
 /**
@@ -459,6 +468,25 @@ export class AccountAccessService {
     )) as unknown as CoordinatesSol2Body;
   }
 
+  /**
+   * Ticks or clears SOL 3 Coordinator on a Leader account (sections 7 and 29, decision 0517),
+   * exactly as the SOL 2 tick is.
+   */
+  async setCoordinatesSol3(
+    accountId: string,
+    coordinates: boolean,
+    actor: Actor,
+    claim: CurrentClaim,
+  ): Promise<CoordinatesSol3Body> {
+    return (await this.setLeaderTick(
+      'coordinates_sol_3',
+      accountId,
+      coordinates,
+      actor,
+      claim,
+    )) as unknown as CoordinatesSol3Body;
+  }
+
   /** The one write the ticks share: lock, check the role, write and audit a change. */
   private async setLeaderTick(
     column: LeaderTick,
@@ -481,6 +509,7 @@ export class AccountAccessService {
           'coordinates_life_class',
           'coordinates_sol_1',
           'coordinates_sol_2',
+          'coordinates_sol_3',
         ])
         .where('id', '=', accountId)
         .forNoKeyUpdate()

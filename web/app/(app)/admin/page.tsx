@@ -457,6 +457,7 @@ function detailsOf(row: AccountListRow, wholeChurch: boolean): string {
     wholeChurch && row.coordinates_life_class ? 'Life Class Coordinator' : null,
     wholeChurch && row.coordinates_sol_1 ? 'SOL 1 Coordinator' : null,
     wholeChurch && row.coordinates_sol_2 ? 'SOL 2 Coordinator' : null,
+    wholeChurch && row.coordinates_sol_3 ? 'SOL 3 Coordinator' : null,
   ].filter((tick): tick is string => tick !== null);
   return ticks.length > 0 ? ticks.join(', ') : 'Recording only';
 }
@@ -465,6 +466,7 @@ const LEVEL_LABELS: Record<LevelCoordinators['level'], string> = {
   LIFE_CLASS: 'Life Class',
   SOL_1: 'SOL 1',
   SOL_2: 'SOL 2',
+  SOL_3: 'SOL 3',
 };
 
 /**

@@ -1106,6 +1106,59 @@ test.describe('Full view on the person page (decision 0323, point 1)', () => {
     ).toBeVisible();
   });
 
+  test('ticks SOL 3 Coordinator with the other ticks, sending it on its own route (decision 0517)', async ({
+    page,
+  }) => {
+    await mockSignedIn(page);
+    await mockPeople(page);
+    await mockGrants(page, ['accounts.manage', 'roles.manage']);
+    await mockPastoralPath(page);
+    let coordinates = false;
+    await page.route(`**/api/v1/accounts/for-person/${PERSON_IN_SCOPE.id}`, (route) =>
+      route.fulfill(
+        json({
+          account: {
+            id: ACCOUNT_ID,
+            email: 'marilou@example.test',
+            status: 'ACTIVE',
+            roles: ['LEADER'],
+            created_at: '2026-09-22T02:00:00.000Z',
+            second_step: { required: false, set_up_at: null },
+            full_view: true,
+            approves_cells: false,
+            moves_people: false,
+            coordinates_life_class: false,
+            coordinates_sol_1: false,
+            coordinates_sol_2: false,
+            coordinates_sol_3: coordinates,
+          },
+        }),
+      ),
+    );
+    const sent: { path: string; body: unknown }[] = [];
+    await page.route('**/api/v1/accounts/*/coordinates-sol-3', (route) => {
+      const body = route.request().postDataJSON() as { coordinates_sol_3: boolean };
+      sent.push({ path: new URL(route.request().url()).pathname, body });
+      coordinates = body.coordinates_sol_3;
+      return route.fulfill(json({ id: ACCOUNT_ID, coordinates_sol_3: body.coordinates_sol_3 }));
+    });
+
+    await page.goto(`${PROFILE}?view=account`);
+
+    const box = page.getByRole('checkbox', { name: /^SOL 3 Coordinator/ });
+    await expect(box).not.toBeChecked();
+    await expect(page.getByText('Marilou does not coordinate SOL 3.')).toBeVisible();
+
+    await box.click();
+    await expect.poll(() => sent.length).toBe(1);
+    expect(sent).toEqual([
+      { path: `/api/v1/accounts/${ACCOUNT_ID}/coordinates-sol-3`, body: { coordinates_sol_3: true } },
+    ]);
+    await expect(
+      page.getByText("Marilou opens the church's SOL 3 classes and names their Teachers, under Classes."),
+    ).toBeVisible();
+  });
+
   test('ticks Moves people beside Approves Cells, sending it on its own route (decision 0356)', async ({
     page,
   }) => {

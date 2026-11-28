@@ -212,7 +212,7 @@ describe('SOL 2 in the school (section 29, decision 0516)', () => {
       const read = await get(admin, 'accounts/coordinators').expect(200);
       const levels = (read.body as { data: { level: string; people: { account_id: string }[] }[] })
         .data;
-      expect(levels.map((each) => each.level)).toEqual(['LIFE_CLASS', 'SOL_1', 'SOL_2']);
+      expect(levels.map((each) => each.level)).toEqual(['LIFE_CLASS', 'SOL_1', 'SOL_2', 'SOL_3']);
       expect(levels[2].people.map((each) => each.account_id)).toEqual([sol2Coordinator.id]);
     });
   });

@@ -59,7 +59,7 @@ test('Registration offers SOL 2 as a third level, with its count', async ({ page
   });
   await page.goto('/equipping/registration');
   const level = page.getByRole('group', { name: 'Level' });
-  await expect(level.getByRole('button')).toHaveText(['Life Class · 2', 'SOL 1 · 0', 'SOL 2 · 0']);
+  await expect(level.getByRole('button')).toHaveText(['Life Class · 2', 'SOL 1 · 0', 'SOL 2 · 0', 'SOL 3 · 0']);
   await level.getByRole('button', { name: 'SOL 2 · 0' }).click();
   await expect(page.getByRole('button', { name: 'Register for SOL 2' })).toBeVisible();
   await expect(page.getByText(/Nobody is registered for SOL 2 in Term/)).toBeVisible();
@@ -150,13 +150,14 @@ test('a Coordinator of SOL 1 and SOL 2 picks between them, and opens a SOL 2 cla
   await expect(dialog.getByLabel('Encounter weekend')).toHaveCount(0);
 });
 
-test('Final Grades offers SOL 2 beside Life Class and SOL 1', async ({ page }) => {
+test('Final Grades offers SOL 2 beside Life Class, SOL 1 and SOL 3', async ({ page }) => {
   await registrar(page);
   await page.goto('/equipping/final-grades');
   await expect(page.getByRole('group', { name: 'Level' }).getByRole('button')).toHaveText([
     /Life Class/,
     /SOL 1/,
     /SOL 2/,
+    /SOL 3/,
   ]);
 });
 

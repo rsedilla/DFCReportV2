@@ -217,7 +217,7 @@ export interface TrainingPage {
   next_cursor: string | null;
   /** Whether the reader may tick the Encounter and Life Class: the Admin alone (decision 0509). */
   school_may_tick: boolean;
-  /** The levels the school files now, SOL 1 and SOL 2 each once a class of it opened (0514, 0516). */
+  /** The levels the school files now, each SOL level once a class of it opened (0514, 0516, 0517). */
   school_programs?: TrainingProgram[];
 }
 

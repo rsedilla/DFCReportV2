@@ -534,6 +534,8 @@ export function mockTraining(
     sol1FromSchool?: boolean;
     /** SOL 2 the school's too, as once a SOL 2 class has opened (decision 0516, point 1). */
     sol2FromSchool?: boolean;
+    /** SOL 3 the school's too, as once a SOL 3 class has opened (decision 0517, point 1). */
+    sol3FromSchool?: boolean;
   } = {},
 ): Promise<GrowthTraffic> {
   return mockTab(
@@ -550,6 +552,7 @@ export function mockTraining(
         'LIFE_CLASS',
         ...(fixture.sol1FromSchool ? ['SOL_1'] : []),
         ...(fixture.sol2FromSchool ? ['SOL_2'] : []),
+        ...(fixture.sol3FromSchool ? ['SOL_3'] : []),
       ],
     },
   );

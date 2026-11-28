@@ -115,6 +115,7 @@ describe('accounts: provisioning, activation and reset (section 6)', () => {
         coordinates_life_class: false,
         coordinates_sol_1: false,
         coordinates_sol_2: false,
+        coordinates_sol_3: false,
         // Nor has its holder ticked the Privacy Notice (decision 0496).
         privacy_notice_acknowledged_at: null,
         // A Leader account is not disabled with its record unasked (decision 0499).

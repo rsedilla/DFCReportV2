@@ -57,6 +57,7 @@ export const KIND_OF_ACTION: Record<AuditAction, Exclude<AuditKind, 'EVERYTHING'
   'account.coordinates_life_class_changed': 'ACCOUNTS',
   'account.coordinates_sol_1_changed': 'ACCOUNTS',
   'account.coordinates_sol_2_changed': 'ACCOUNTS',
+  'account.coordinates_sol_3_changed': 'ACCOUNTS',
   'account.username_set': 'ACCOUNTS',
   'second_step.set_up': 'ACCOUNTS',
   'second_step.reset': 'ACCOUNTS',
