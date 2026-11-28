@@ -130,6 +130,8 @@ export interface AccountsTable {
   coordinates_life_class: Generated<boolean>;
   /** SOL 1 Coordinator (decision 0514): one tick per level, offered only with Full view. */
   coordinates_sol_1: Generated<boolean>;
+  /** SOL 2 Coordinator (decision 0516), as SOL 1's is. */
+  coordinates_sol_2: Generated<boolean>;
   /**
    * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
    * and numbers, unique; both are database constraints. Set only by its holder.
@@ -349,6 +351,8 @@ export type AuditAction =
   | 'account.coordinates_life_class_changed'
   // SOL 1 Coordinator ticked or cleared (decision 0514), as the Life Class one is.
   | 'account.coordinates_sol_1_changed'
+  // SOL 2 Coordinator ticked or cleared (decision 0516), as the SOL 1 one is.
+  | 'account.coordinates_sol_2_changed'
   // A username set or changed by its holder, with the old and the new (decision 0337).
   // Targets the account.
   | 'account.username_set'
@@ -960,8 +964,8 @@ export interface ConquestConfirmationsTable extends GrowthStatement {
  * LC Party before each, recorded by an administrator. Each party is at least five weeks
  * before its own weekend, a constraint in migration 0019.
  */
-/** Section 29's levels (decisions 0499 and 0514): Life Class, then SOL 1; SOL 2 and 3 later. */
-export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1';
+/** Section 29's levels (decisions 0499, 0514 and 0516): Life Class, SOL 1 and SOL 2; SOL 3 later. */
+export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1' | 'SOL_2';
 
 /** The record requirements a registration can be made despite (decision 0499, point 7). */
 export type EquippingRequirement =
@@ -972,7 +976,11 @@ export type EquippingRequirement =
   // SOL 1's three (decision 0501, point 18; decision 0514).
   | 'LIFE_CLASS_PASSED'
   | 'WIN_3'
-  | 'SOL_1_MANUAL';
+  | 'SOL_1_MANUAL'
+  // SOL 2's three (decision 0501, point 18; decision 0516).
+  | 'SOL_1_PASSED'
+  | 'LEADS_A_CELL'
+  | 'SOL_2_BOOK';
 
 /** A class of one level in one term (section 29, migration 0050). Never deleted. */
 export interface EquippingClassesTable {

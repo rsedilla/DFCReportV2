@@ -6,14 +6,36 @@ import { authenticatedRequest } from './session';
  * API checks.
  */
 
-export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1';
+export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1' | 'SOL_2';
 
-/** The levels the school runs, in order (decisions 0499 and 0514). */
-export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
+/** The levels the school runs, in order (decisions 0499, 0514 and 0516). */
+export const EQUIPPING_LEVELS: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1', 'SOL_2'];
+
+/**
+ * The levels whose classes may be opened, enrolled into and graded (decision 0516, point 4): SOL 2
+ * signs people up before its register and final grades exist, and its classes wait for them.
+ */
+export const LEVELS_THAT_OPEN: readonly EquippingLevel[] = ['LIFE_CLASS', 'SOL_1'];
+
+/** Why a level's classes cannot be opened yet, in the words *Classes* and *Enrollment* show. */
+export function notOpenYet(level: EquippingLevel): string {
+  const name = LEVEL_LABELS[level];
+  return `A ${name} class can be opened once DREAMS has ${name}’s register and final grades. Signing up for ${name} is open now.`;
+}
 
 export const LEVEL_LABELS: Record<EquippingLevel, string> = {
   LIFE_CLASS: 'Life Class',
   SOL_1: 'SOL 1',
+  SOL_2: 'SOL 2',
+};
+
+/**
+ * What the Registrar ticks for a SOL level, its third requirement (decisions 0514 and 0516): SOL
+ * 1's manual and SOL 2's book, each the tuition, paid outside DREAMS.
+ */
+export const SOL_TICKED: Record<Exclude<EquippingLevel, 'LIFE_CLASS'>, { code: RequirementCode; item: string }> = {
+  SOL_1: { code: 'SOL_1_MANUAL', item: 'manual' },
+  SOL_2: { code: 'SOL_2_BOOK', item: 'book' },
 };
 
 export type RequirementCode =
@@ -23,7 +45,10 @@ export type RequirementCode =
   | 'SUYNL_LESSONS_1_TO_4'
   | 'LIFE_CLASS_PASSED'
   | 'WIN_3'
-  | 'SOL_1_MANUAL';
+  | 'SOL_1_MANUAL'
+  | 'SOL_1_PASSED'
+  | 'LEADS_A_CELL'
+  | 'SOL_2_BOOK';
 export type RegistrationStatus =
   | 'REGISTERED'
   | 'REGISTERED_WITH_EXCEPTION'
@@ -54,6 +79,10 @@ export const REQUIREMENT_LABELS: Record<RequirementCode, string> = {
   LIFE_CLASS_PASSED: 'Life Class passed',
   WIN_3: 'Win 3, or 3 disciples',
   SOL_1_MANUAL: 'Has the SOL 1 Manual',
+  // SOL 2's three (decision 0516).
+  SOL_1_PASSED: 'SOL 1 passed',
+  LEADS_A_CELL: 'Leads a Cell now',
+  SOL_2_BOOK: 'Has the SOL 2 book',
 };
 
 export const STATUS_LABELS: Record<RegistrationStatus, string> = {

@@ -126,6 +126,8 @@ export class AccountProvisioningService {
       coordinates_life_class: boolean;
       /** SOL 1 Coordinator (decision 0514). */
       coordinates_sol_1: boolean;
+      /** SOL 2 Coordinator (decision 0516). */
+      coordinates_sol_2: boolean;
       /** When the holder ticked the Privacy Notice in force, or null (decision 0496). */
       privacy_notice_acknowledged_at: string | null;
       /**
@@ -154,6 +156,7 @@ export class AccountProvisioningService {
         'moves_people',
         'coordinates_life_class',
         'coordinates_sol_1',
+        'coordinates_sol_2',
       ])
       .where('person_id', '=', personId)
       .executeTakeFirst();
@@ -184,6 +187,7 @@ export class AccountProvisioningService {
         moves_people: account.moves_people,
         coordinates_life_class: account.coordinates_life_class,
         coordinates_sol_1: account.coordinates_sol_1,
+        coordinates_sol_2: account.coordinates_sol_2,
         privacy_notice_acknowledged_at: await this.privacyNotice.acknowledgedAt(account.id),
         disabled_with_record: roles.some((row) => row.role === 'REGISTRAR'),
       },

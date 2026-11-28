@@ -30,6 +30,8 @@ export interface PersonAccount {
   coordinates_life_class?: boolean;
   /** SOL 1 Coordinator (decision 0514); meaningful on a Leader account only. */
   coordinates_sol_1?: boolean;
+  /** SOL 2 Coordinator (decision 0516); meaningful on a Leader account only. */
+  coordinates_sol_2?: boolean;
   /**
    * When the holder ticked the Privacy Notice in force, or null where they have not (decision
    * 0496). Absent from a server that predates it.
@@ -175,9 +177,22 @@ export function setCoordinatesSol1(
   });
 }
 
+/** Ticks or clears SOL 2 Coordinator on a Leader account (decision 0516). Needs `roles.manage`. */
+export function setCoordinatesSol2(
+  accountId: string,
+  coordinates: boolean,
+  idempotencyKey: string,
+): Promise<{ id: string; coordinates_sol_2: boolean }> {
+  return authenticatedRequest(`/api/v1/accounts/${encodeURIComponent(accountId)}/coordinates-sol-2`, {
+    method: 'POST',
+    body: { coordinates_sol_2: coordinates },
+    idempotencyKey,
+  });
+}
+
 /** One level's Coordinators, for the Admin's Coordinators list (decision 0514). */
 export interface LevelCoordinators {
-  level: 'LIFE_CLASS' | 'SOL_1';
+  level: 'LIFE_CLASS' | 'SOL_1' | 'SOL_2';
   people: { account_id: string; person_id: string; name: string }[];
 }
 
@@ -236,6 +251,7 @@ export interface AccountListRow {
   moves_people: boolean;
   coordinates_life_class?: boolean;
   coordinates_sol_1?: boolean;
+  coordinates_sol_2?: boolean;
 }
 
 export async function listAccounts(

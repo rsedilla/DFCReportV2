@@ -1403,7 +1403,8 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
       json({ all: 221, active: 212, pending_activation: 6, paused: 1, no_second_step: 2, disabled: 3 }),
     ),
   );
-  // Who coordinates each level (decision 0514): two for Life Class, none yet for SOL 1.
+  // Who coordinates each level (decisions 0514 and 0516): two for Life Class, none yet for SOL 1,
+  // one for SOL 2.
   await page.route('**/api/v1/accounts/coordinators', (route) =>
     route.fulfill(
       json({
@@ -1416,6 +1417,12 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
             ],
           },
           { level: 'SOL_1', people: [] },
+          {
+            level: 'SOL_2',
+            people: [
+              { account_id: '6a1e0000-0000-4000-8000-000000000a03', person_id: '6a1e0000-0000-4000-8000-000000000b03', name: 'Ernesto Dimalanta' },
+            ],
+          },
         ],
       }),
     ),

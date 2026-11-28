@@ -103,6 +103,12 @@ export class SetCoordinatesSol1Dto {
   coordinates_sol_1!: boolean;
 }
 
+/** SOL 2 Coordinator on a Leader account, ticked or cleared (decision 0516). */
+export class SetCoordinatesSol2Dto {
+  @IsBoolean()
+  coordinates_sol_2!: boolean;
+}
+
 export class ForgotPasswordDto {
   @IsEmailAddress()
   @MaxLength(320)
