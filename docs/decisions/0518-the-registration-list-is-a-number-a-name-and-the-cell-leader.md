@@ -12,8 +12,12 @@ sentence that the Registration list names what was not met (*Not met: â€¦ Why: â
 29's clause saying the same. Both stay on the registration, which still refuses one without the
 other (`equipping_registrations_exception_has_reason`), and *With exception* still marks the row.
 The owner was told before ruling that the reason was the one place an Admin reviewing an
-exception (decision 0501, point 18) would see why it was let in, and chose to leave it off: no
-screen now shows it, and it is kept on the registration.
+exception would see why it was let in, and chose to leave it off: no screen now shows it, and it
+is kept on the registration. **So the Admin's review of an exception is withdrawn** (owner,
+"Withdraw the review", after `architecture-guardian` raised that Section 29 and decision 0501,
+point 18, still asked for one). It withdraws decision 0499's too, where it began (points 3 and
+7), so it holds for Life Class and SOL alike: a requirement not met still warns and still needs a reason, and
+nobody reviews it afterwards.
 
 **3. The leader column is *Cell Leader*, the leader of the Cell the person attends now**
 (owner, "Cell Leader", choosing it over today's name under a clearer heading). The column had
