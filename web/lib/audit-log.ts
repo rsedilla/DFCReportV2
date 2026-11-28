@@ -102,6 +102,7 @@ const WHAT: Record<string, string> = {
   'account.coordinates_life_class_changed': 'Life Class Coordinator changed',
   'account.coordinates_sol_1_changed': 'SOL 1 Coordinator changed',
   'account.coordinates_sol_2_changed': 'SOL 2 Coordinator changed',
+  'account.coordinates_sol_3_changed': 'SOL 3 Coordinator changed',
   'account.username_set': 'Username set',
   'second_step.set_up': 'Second sign-in step set up',
   'second_step.reset': 'Second sign-in step reset',

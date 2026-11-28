@@ -130,12 +130,14 @@ export const LEVEL_NAMES: Record<EquippingLevel, string> = {
   LIFE_CLASS: 'Life Class',
   SOL_1: 'SOL 1',
   SOL_2: 'SOL 2',
+  SOL_3: 'SOL 3',
 };
 
 /**
- * **Who may guide a level: one level ahead** (decision 0501, point 4; decision 0516): SOL 1
- * passed guides Life Class, SOL 2 passed guides SOL 1 or Life Class, and SOL 3 passed guides any
- * level below it. Lowest first.
+ * **Who may guide a level: one level ahead** (decision 0501, point 4; decisions 0516 and 0517):
+ * SOL 1 passed guides Life Class, SOL 2 passed guides SOL 1 or Life Class, and SOL 3 passed guides
+ * any level below it, and SOL 3 itself with three Cell Leaders among their own disciples
+ * (`GUIDE_CELL_LEADERS`). Lowest first.
  */
 export function guidingPrograms(level: EquippingLevel): readonly ('SOL_1' | 'SOL_2' | 'SOL_3')[] {
   switch (level) {
@@ -144,9 +146,19 @@ export function guidingPrograms(level: EquippingLevel): readonly ('SOL_1' | 'SOL
     case 'SOL_1':
       return ['SOL_2', 'SOL_3'];
     case 'SOL_2':
+    case 'SOL_3':
       return ['SOL_3'];
   }
 }
+
+/**
+ * **A SOL 3 Guide has three Cell Leaders under them** (owner, 2026-11-20, option A; decision
+ * 0501, point 4): at least three of their own direct disciples each leading an `ACTIVE` Cell now.
+ */
+export const GUIDE_CELL_LEADERS = 3;
+
+/** SOL 3's twelve: twelve direct disciples now, on open assignments (decision 0501, point 18). */
+export const SOL_3_DISCIPLES = 12;
 
 /**
  * How many Guides a SOL class needs for this many students of one sex (decision 0501, point 8):
@@ -326,6 +338,9 @@ export class EquippingService {
     }
     if (level === 'SOL_2') {
       return this.sol2RequirementsOf(personIds);
+    }
+    if (level === 'SOL_3') {
+      return this.sol3RequirementsOf(personIds);
     }
     const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
     const [leaders, leaderNames, standing, lessons] = await Promise.all([
@@ -516,6 +531,81 @@ export class EquippingService {
   }
 
   /**
+   * **SOL 3's three record requirements** (decision 0501, point 18; decision 0517): SOL 2 passed,
+   * by a posted grade of the school or a pass recorded before it, both of which Training holds;
+   * the leadership of an `ACTIVE` Cell now; and twelve direct disciples now, counted on open
+   * pastoral assignments, which an archive or a merge ends, and never shown as a count (decision
+   * 0514, point 5's reason). Read once, at registration, and never again in the term.
+   */
+  private async sol3RequirementsOf(
+    personIds: readonly string[],
+  ): Promise<Map<string, RequirementCheck[]>> {
+    const ids = [...new Set(personIds.map((id) => canonicalId(id)))];
+    const [passed, leaders, cells, disciples, posted] = await Promise.all([
+      this.training.holdersOfAny(ids, ['SOL_2']),
+      this.cells.currentCellLeaderIds(ids),
+      this.cells.currentCellsOfMany(ids),
+      this.hierarchy.discipleCountsOf(this.db, ids),
+      ids.length === 0
+        ? Promise.resolve([])
+        : this.db
+            // The grade as it stands, a change after posting included (decision 0513).
+            .selectFrom('equipping_current_grades as g')
+            .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
+            .innerJoin('equipping_classes as c', 'c.id', 'p.class_id')
+            .innerJoin('equipping_enrollments as n', 'n.id', 'g.enrollment_id')
+            .innerJoin('equipping_registrations as r', 'r.id', 'n.registration_id')
+            .select(['r.person_id', 'c.name', 'r.term_year', 'r.term_number'])
+            .where('g.grade', '=', 'PASSED')
+            .where('r.level', '=', 'SOL_2')
+            .where('r.person_id', 'in', ids)
+            .orderBy('p.posted_at')
+            .execute(),
+    ]);
+    const passedIn = new Map(
+      posted.map((row) => [
+        canonicalId(row.person_id),
+        `Passed ${row.name}, Term ${row.term_number}, ${row.term_year}`,
+      ]),
+    );
+    const leading = new Set([...leaders].map((id) => canonicalId(id)));
+    return new Map(
+      ids.map((id) => {
+        const codes = (cells.get(id)?.leads ?? []).map((cell) => cell.cellId).sort();
+        const twelve = (disciples.get(id) ?? 0) >= SOL_3_DISCIPLES;
+        return [
+          id,
+          [
+            {
+              code: 'SOL_2_PASSED' as const,
+              met: passed.has(id),
+              detail: passed.has(id)
+                ? (passedIn.get(id) ?? 'SOL 2 passed')
+                : 'SOL 2 not passed yet',
+            },
+            {
+              code: 'LEADS_A_CELL' as const,
+              met: leading.has(id),
+              detail: leading.has(id)
+                ? codes.length > 0
+                  ? `Leads ${codes.join(', ')}`
+                  : 'Leads a Cell'
+                : 'leads no Cell now',
+            },
+            {
+              code: 'TWELVE_DISCIPLES' as const,
+              met: twelve,
+              detail: twelve
+                ? `${SOL_3_DISCIPLES} disciples under them in DREAMS`
+                : `needs ${SOL_3_DISCIPLES} disciples under them in DREAMS`,
+            },
+          ],
+        ];
+      }),
+    );
+  }
+
+  /**
    * One person as the registration form shows them: who they are, their leader and Cell, their
    * birthday, and the four record requirements.
    */
@@ -624,7 +714,13 @@ export class EquippingService {
         full_name: decided.get(row.id)?.fullName ?? `${row.first_name} ${row.last_name}`,
         direct_leader_name: names.get(row.id) ?? null,
         ...(who === 'guides'
-          ? { qualifies: highest ? `Passed ${highest.level.replace('_', ' ')}` : null }
+          ? {
+              qualifies: highest
+                ? `Passed ${highest.level.replace('_', ' ')}` +
+                  // A SOL 3 Guide's second condition, said too (decision 0501, point 4).
+                  (level === 'SOL_3' ? `, with ${GUIDE_CELL_LEADERS} Cell Leaders under them` : '')
+                : null,
+            }
           : {}),
       };
     });
@@ -1168,6 +1264,9 @@ export class EquippingService {
     }
     if (body.level === 'SOL_2' && !body.manual_confirmed) {
       unmet.push('SOL_2_BOOK');
+    }
+    if (body.level === 'SOL_3' && !body.manual_confirmed) {
+      unmet.push('SOL_3_BOOK');
     }
     const reason = body.exception_reason?.trim() || null;
     if (unmet.length > 0 && reason === null) {
@@ -1719,8 +1818,11 @@ export class EquippingService {
       if (!may.has(id)) {
         throw new InvariantViolationError(
           `A ${LEVEL_NAMES[cls.level]} Guide has passed ` +
-            `${guidingPrograms(cls.level)[0].replace('_', ' ')} and is in the tree ` +
-            '(SKILL.md section 29).',
+            `${guidingPrograms(cls.level)[0].replace('_', ' ')}` +
+            (cls.level === 'SOL_3'
+              ? `, has ${GUIDE_CELL_LEADERS} of their own disciples each leading a Cell,`
+              : '') +
+            ' and is in the tree (SKILL.md section 29).',
           { field: 'person_id' },
         );
       }
@@ -1922,10 +2024,39 @@ export class EquippingService {
     among: readonly string[] | null,
     level: EquippingLevel,
   ): Promise<Set<string>> {
-    const passed = await this.training.holdersOfAny(among, guidingPrograms(level));
+    let passed = await this.training.holdersOfAny(among, guidingPrograms(level));
+    if (level === 'SOL_3') {
+      passed = await this.withCellLeadersUnderWithin(executor, passed);
+    }
     const inTree = await this.hierarchy.withOpenAssignment([...passed], executor);
     const records = await this.people.equippingAccountPersons();
     return new Set([...inTree].filter((id) => !records.has(canonicalId(id))));
+  }
+
+  /**
+   * Those of these people with at least `GUIDE_CELL_LEADERS` of their own direct disciples each
+   * leading an `ACTIVE` Cell now (decision 0501, point 4): a SOL 3 Guide's second condition. Read
+   * through `hierarchy` and `cells`, which own the two tables.
+   */
+  private async withCellLeadersUnderWithin(
+    executor: Db | Transaction<Database>,
+    among: ReadonlySet<string>,
+  ): Promise<Set<string>> {
+    const edges = await this.hierarchy.openDiscipleEdgesOf(executor, [...among]);
+    const leading = await this.cells.currentCellLeaderIds(
+      edges.map((edge) => edge.personId),
+      executor,
+    );
+    const counts = new Map<string, number>();
+    for (const edge of edges) {
+      if (leading.has(edge.personId)) {
+        const leader = canonicalId(edge.leaderId);
+        counts.set(leader, (counts.get(leader) ?? 0) + 1);
+      }
+    }
+    return new Set(
+      [...among].filter((id) => (counts.get(canonicalId(id)) ?? 0) >= GUIDE_CELL_LEADERS),
+    );
   }
 
   /** The class row, locked, so two writes sharing its students out never interleave. */

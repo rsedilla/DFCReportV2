@@ -18,8 +18,8 @@ export type SchoolEvidence =
   /** A posted *Passed*: dated the day it was posted. */
   | { kind: 'POSTED'; postedAt: Date };
 
-/** The SOL levels the school runs (decisions 0514 and 0516); SOL 3 is not one yet. */
-export type SolLevel = 'SOL_1' | 'SOL_2';
+/** The SOL levels the school runs (decisions 0514, 0516 and 0517). */
+export type SolLevel = 'SOL_1' | 'SOL_2' | 'SOL_3';
 
 /** The programs the school files from: the Encounter, Life Class and each SOL level it runs. */
 export type SchoolProgram = 'ENCOUNTER' | 'LIFE_CLASS' | SolLevel;

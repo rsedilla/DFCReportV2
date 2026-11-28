@@ -132,6 +132,8 @@ export interface AccountsTable {
   coordinates_sol_1: Generated<boolean>;
   /** SOL 2 Coordinator (decision 0516), as SOL 1's is. */
   coordinates_sol_2: Generated<boolean>;
+  /** SOL 3 Coordinator (decision 0517), as SOL 2's is. */
+  coordinates_sol_3: Generated<boolean>;
   /**
    * Sign-in takes it or the email address (section 6, decision 0337). Lowercase letters
    * and numbers, unique; both are database constraints. Set only by its holder.
@@ -353,6 +355,8 @@ export type AuditAction =
   | 'account.coordinates_sol_1_changed'
   // SOL 2 Coordinator ticked or cleared (decision 0516), as the SOL 1 one is.
   | 'account.coordinates_sol_2_changed'
+  // SOL 3 Coordinator ticked or cleared (decision 0517), as the SOL 2 one is.
+  | 'account.coordinates_sol_3_changed'
   // A username set or changed by its holder, with the old and the new (decision 0337).
   // Targets the account.
   | 'account.username_set'
@@ -964,8 +968,8 @@ export interface ConquestConfirmationsTable extends GrowthStatement {
  * LC Party before each, recorded by an administrator. Each party is at least five weeks
  * before its own weekend, a constraint in migration 0019.
  */
-/** Section 29's levels (decisions 0499, 0514 and 0516): Life Class, SOL 1 and SOL 2; SOL 3 later. */
-export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1' | 'SOL_2';
+/** Section 29's levels (decisions 0499, 0514, 0516 and 0517): Life Class, then SOL 1 to 3. */
+export type EquippingLevel = 'LIFE_CLASS' | 'SOL_1' | 'SOL_2' | 'SOL_3';
 
 /** The record requirements a registration can be made despite (decision 0499, point 7). */
 export type EquippingRequirement =
@@ -980,7 +984,11 @@ export type EquippingRequirement =
   // SOL 2's three (decision 0501, point 18; decision 0516).
   | 'SOL_1_PASSED'
   | 'LEADS_A_CELL'
-  | 'SOL_2_BOOK';
+  | 'SOL_2_BOOK'
+  // SOL 3's four (decision 0501, point 18; decision 0517).
+  | 'SOL_2_PASSED'
+  | 'TWELVE_DISCIPLES'
+  | 'SOL_3_BOOK';
 
 /** A class of one level in one term (section 29, migration 0050). Never deleted. */
 export interface EquippingClassesTable {

@@ -37,11 +37,12 @@ import type { TestAccount, TestPerson } from '../setup/fixtures';
  *
  * Fixture names are invented (CLAUDE.md, Secrets).
  */
-// Run for SOL 1 and for SOL 2, whose register, quiz, book, grades and Training filing are SOL 1's
-// (decision 0516): one suite, so the two cannot drift apart unnoticed.
+// Run for SOL 1, SOL 2 and SOL 3, whose register, quiz, book, grades and Training filing are SOL 1's
+// (decisions 0516 and 0517): one suite, so the levels cannot drift apart unnoticed.
 describe.each([
   { level: 'SOL_1', name: 'SOL 1', guidedBy: 'SOL_2' },
   { level: 'SOL_2', name: 'SOL 2', guidedBy: 'SOL_3' },
+  { level: 'SOL_3', name: 'SOL 3', guidedBy: 'SOL_3' },
 ] as const)(
   '$name’s register (section 29, decisions 0514 and 0516)',
   ({ level, name, guidedBy }) => {
@@ -187,6 +188,16 @@ describe.each([
           recorded_by: admin.id,
         })
         .execute();
+
+      // A SOL 3 Guide has three of their own disciples each leading a Cell too (decision 0501,
+      // point 4).
+      if (level === 'SOL_3') {
+        for (const name of ['Quin', 'Rafa', 'Sixto']) {
+          const disciple = await createPerson(db, { firstName: name, network: 'MENS' });
+          await assignTo(db, disciple.id, pedro.id);
+          await createCell(db, { leader: disciple });
+        }
+      }
 
       classId = (
         (

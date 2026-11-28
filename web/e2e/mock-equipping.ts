@@ -62,7 +62,7 @@ export async function mockEquipping(
   const second = options.tries ? { try_number: 2 } : {};
   // The counts on the Level picker (decision 0514).
   await page.route('**/api/v1/equipping/registrations/counts?*', (route) =>
-    route.fulfill(json({ LIFE_CLASS: 2, SOL_1: 0, SOL_2: 0 })),
+    route.fulfill(json({ LIFE_CLASS: 2, SOL_1: 0, SOL_2: 0, SOL_3: 0 })),
   );
   await page.route('**/api/v1/equipping/registrations?*', (route) =>
     route.fulfill(

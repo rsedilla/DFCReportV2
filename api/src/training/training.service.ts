@@ -41,11 +41,7 @@ import { PeopleReadService } from '../people/people.read.service';
 import { composeName } from '../people/people.shared';
 
 import { TRAINING_PROGRAMS, type TrainingListDto, type TrainingStep } from './dto/training.dto';
-import {
-  SCHOOL_EVIDENCE_PORT,
-  type SchoolEvidencePort,
-  type SchoolProgram,
-} from './school-evidence.port';
+import { SCHOOL_EVIDENCE_PORT, type SchoolEvidencePort } from './school-evidence.port';
 
 import type { CurrentClaim } from '../common/idempotency/current-idempotency.decorator';
 import type { Database, TrainingProgram } from '../database/schema';
@@ -135,7 +131,7 @@ export class TrainingService {
   ): Promise<ReadonlySet<TrainingProgram>> {
     const run: ReadonlySet<TrainingProgram> =
       this.schoolEvidence === undefined
-        ? new Set(['SOL_1', 'SOL_2'])
+        ? new Set(['SOL_1', 'SOL_2', 'SOL_3'])
         : await this.schoolEvidence.solLevelsRun(executor);
     return new Set([...SCHOOL_PROGRAMS, ...run]);
   }
@@ -276,7 +272,7 @@ export class TrainingService {
       return await this.db.transaction().execute(async (trx) => {
         // Before anything else, so no SOL class opens between reading whether one is open and
         // this save committing (decision 0514, point 13; `equipping/sol-opening.ts`).
-        if (changes.some((change) => change.program === 'SOL_1' || change.program === 'SOL_2')) {
+        if (changes.some((change) => change.program.startsWith('SOL_'))) {
           await this.schoolEvidence?.shareSolOpeningWithin(trx);
         }
         const now = await databaseNow(trx);
@@ -554,11 +550,7 @@ export class TrainingService {
         (_, index) => canonicalId(pairs.kept[index]) === canonicalId(personId),
       ),
     ];
-    const evidence = await this.schoolEvidence.evidenceWithin(
-      trx,
-      records,
-      program as SchoolProgram,
-    );
+    const evidence = await this.schoolEvidence.evidenceWithin(trx, records, program);
     const seasonIds = uniqueIds(
       evidence.flatMap((each) => (each.kind === 'WEEKEND' ? [each.seasonId] : [])),
     );

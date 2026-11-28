@@ -618,7 +618,13 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     ],
   };
 
-  async function openAs(page: Page, schoolMayTick: boolean, sol1FromSchool = false, sol2FromSchool = false) {
+  async function openAs(
+    page: Page,
+    schoolMayTick: boolean,
+    sol1FromSchool = false,
+    sol2FromSchool = false,
+    sol3FromSchool = false,
+  ) {
     await mockSignedIn(page);
     await mockWholeChurchReader(page);
     await mockTraining(page, 'accepted', {
@@ -626,6 +632,7 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
       schoolMayTick,
       sol1FromSchool,
       sol2FromSchool,
+      sol3FromSchool,
     });
     await page.goto('/growth/training?all=1');
     await expect(page.getByRole('link', { name: 'Dalisay Soriano' })).toBeVisible();
@@ -681,6 +688,28 @@ test.describe('the Encounter and Life Class from the school (decision 0509)', ()
     ).toBeVisible();
     await expect(
       page.getByRole('row', { name: /Ernani Pascual/ }).getByRole('checkbox', { name: 'SOL 2, Ernani Pascual' }),
+    ).toBeVisible();
+  });
+
+  test('once every SOL level is the school’s, a leader ticks nothing (decision 0517)', async ({ page }) => {
+    await openAs(page, false, true, true, true);
+    await expect(
+      page.getByText('Every level now comes from the school. The Admin ticks one for someone who finished before it.'),
+    ).toBeVisible();
+    await expect(page.getByRole('row', { name: /Ernani Pascual/ }).getByRole('checkbox')).toHaveCount(0);
+  });
+
+  test('once a SOL 3 class opens too, the Admin ticks SOL 3 for one who finished before the school', async ({
+    page,
+  }) => {
+    await openAs(page, true, true, true, true);
+    await expect(
+      page.getByText(
+        'You can tick the Encounter, Life Class, SOL 1, SOL 2 and SOL 3 only for someone who finished before the school.',
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('row', { name: /Ernani Pascual/ }).getByRole('checkbox', { name: 'SOL 3, Ernani Pascual' }),
     ).toBeVisible();
   });
 

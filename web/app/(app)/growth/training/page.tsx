@@ -88,13 +88,13 @@ function TrainingTab() {
   // **Only the Admin ticks the Encounter and Life Class** (decision 0509): the school files them.
   // The shared list types the page by its rows alone; this tab's page also carries the flag.
   const schoolMayTick = (list.people.data as TrainingListPage | undefined)?.school_may_tick ?? false;
-  // SOL 1 and SOL 2 are the school's too once a class of each has opened (decision 0514, point 13;
-  // decision 0516, point 1).
+  // Each SOL level is the school's too once a class of it has opened (decision 0514, point 13;
+  // decisions 0516 and 0517, point 1).
   const schoolPrograms: ReadonlySet<TrainingProgram> = new Set(
     (list.people.data as TrainingListPage | undefined)?.school_programs ?? SCHOOL_PROGRAMS,
   );
   // What the school records now, after the Encounter and Life Class, and what a leader still ticks.
-  const solFromSchool = (['SOL_1', 'SOL_2'] as const).filter((level) => schoolPrograms.has(level));
+  const solFromSchool = (['SOL_1', 'SOL_2', 'SOL_3'] as const).filter((level) => schoolPrograms.has(level));
   const schoolList = inWords(['the Encounter', 'Life Class', ...solFromSchool.map((level) => PROGRAM_LABELS[level])]);
   const leaderTicks = (['SOL_1', 'SOL_2', 'SOL_3'] as const).filter((level) => !schoolPrograms.has(level));
 
@@ -231,7 +231,10 @@ function TrainingTab() {
           <p className="text-ink text-sm font-semibold">
             {schoolMayTick
               ? `You can tick ${schoolList} only for someone who finished before the school.`
-              : `You tick ${leaderTicks.length === 3 ? 'SOL 1 to 3' : inWords(leaderTicks.map((level) => PROGRAM_LABELS[level]))}. ${schoolList.charAt(0).toUpperCase()}${schoolList.slice(1)} now come from the school.`}
+              : leaderTicks.length === 0
+                ? // Once all three SOL levels are the school's, a leader ticks nothing (decision 0517).
+                  'Every level now comes from the school. The Admin ticks one for someone who finished before it.'
+                : `You tick ${leaderTicks.length === 3 ? 'SOL 1 to 3' : inWords(leaderTicks.map((level) => PROGRAM_LABELS[level]))}. ${schoolList.charAt(0).toUpperCase()}${schoolList.slice(1)} now come from the school.`}
           </p>
           <dl className="text-muted mt-2 mb-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
             <dt className="text-ink font-semibold">Key</dt>
@@ -419,7 +422,7 @@ function SourceLabel({ children }: { children: string }) {
   );
 }
 
-/** The two the school always files; SOL 1 and SOL 2 join them once a class of each opens (decisions 0509, 0514, 0516). */
+/** The two the school always files; each SOL level joins them once a class of it opens (decisions 0509, 0514, 0516, 0517). */
 const SCHOOL_PROGRAMS: ReadonlySet<TrainingProgram> = new Set(['ENCOUNTER', 'LIFE_CLASS']);
 
 function doneLabel(row: TrainingPerson, draft: Record<string, DraftEntry>): string {

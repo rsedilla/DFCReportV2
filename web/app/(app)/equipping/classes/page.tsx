@@ -55,11 +55,12 @@ import { describeFailure } from '@/lib/messages';
  */
 type StatusFilter = 'ALL' | CoordinatedClass['status'];
 
-/** Who may guide each level, one level ahead (decision 0501, point 4; decision 0516). */
+/** Who may guide each level, one level ahead (decision 0501, point 4; decisions 0516 and 0517). */
 const GUIDE_PASSED: Record<EquippingLevel, string> = {
   LIFE_CLASS: 'SOL 1',
   SOL_1: 'SOL 2',
   SOL_2: 'SOL 3',
+  SOL_3: 'SOL 3 and has three of their own disciples each leading a Cell',
 };
 
 const STATUS_LABELS: Record<CoordinatedClass['status'], string> = {

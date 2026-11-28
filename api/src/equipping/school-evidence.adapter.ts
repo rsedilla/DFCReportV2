@@ -22,9 +22,9 @@ import type {
  * - **Life Class**: what the school's Life Class stands filed under for each posted grade
  *   (`lifeClassFiledOf`): the day a grade became *Passed*, at posting or by a change after it
  *   (decision 0513), or the weekend a posted *Not yet* passed at; nothing for a pass changed away;
- * - **SOL 1 and SOL 2**: a *Passed* in a class of that level, dated the day it was posted, or the
- *   day a change after posting made it so (decision 0514, points 12 and 13; decision 0516). SOL
- *   has no *Not yet*.
+ * - **SOL 1 to 3**: a *Passed* in a class of that level, dated the day it was posted, or the day a
+ *   change after posting made it so (decision 0514, points 12 and 13; decisions 0516 and 0517).
+ *   SOL has no *Not yet*.
  */
 @Injectable()
 export class SchoolEvidenceAdapter implements SchoolEvidencePort {
@@ -37,7 +37,7 @@ export class SchoolEvidenceAdapter implements SchoolEvidencePort {
       return [];
     }
 
-    if (program === 'SOL_1' || program === 'SOL_2') {
+    if (program === 'SOL_1' || program === 'SOL_2' || program === 'SOL_3') {
       const passed = await trx
         .selectFrom('equipping_current_grades as g')
         .innerJoin('equipping_class_postings as p', 'p.id', 'g.posting_id')
@@ -96,7 +96,7 @@ export class SchoolEvidenceAdapter implements SchoolEvidencePort {
       .selectFrom('equipping_classes')
       .select('level')
       .distinct()
-      .where('level', 'in', ['SOL_1', 'SOL_2'])
+      .where('level', 'in', ['SOL_1', 'SOL_2', 'SOL_3'])
       .where('cancelled_at', 'is', null)
       .execute();
     return new Set(open.map((row) => row.level as SolLevel));

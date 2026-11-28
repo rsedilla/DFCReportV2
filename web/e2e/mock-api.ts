@@ -1423,6 +1423,7 @@ export async function mockAdminArea(page: Page): Promise<string[]> {
               { account_id: '6a1e0000-0000-4000-8000-000000000a03', person_id: '6a1e0000-0000-4000-8000-000000000b03', name: 'Ernesto Dimalanta' },
             ],
           },
+          { level: 'SOL_3', people: [] },
         ],
       }),
     ),
